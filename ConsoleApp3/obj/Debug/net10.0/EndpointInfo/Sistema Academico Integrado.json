@@ -1,0 +1,863 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Sistema Academico Integrado",
+    "version": "1.0"
+  },
+  "paths": {
+    "/api/Alunos": {
+      "get": {
+        "tags": [
+          "Alunos"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Aluno"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Aluno"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Aluno"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Alunos"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Aluno"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Aluno"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/Aluno"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/Aluno"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Aluno"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Aluno"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Coordenadores": {
+      "get": {
+        "tags": [
+          "Coordenadores"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Coordenador"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Coordenador"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Coordenador"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Coordenadores"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Coordenador"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Coordenador"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/Coordenador"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/Coordenador"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Coordenador"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Coordenador"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Cursos": {
+      "post": {
+        "tags": [
+          "Cursos"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Curso"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Curso"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/Curso"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Cursos"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Cursos/{id}": {
+      "get": {
+        "tags": [
+          "Cursos"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Professores": {
+      "get": {
+        "tags": [
+          "Professores"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Professor"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Professor"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Professor"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Professores"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Professor"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Professor"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/Professor"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/Professor"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Professor"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Professor"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Turmas": {
+      "get": {
+        "tags": [
+          "Turmas"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Turmas"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Turma"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Turma"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/Turma"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Usuarios": {
+      "post": {
+        "tags": [
+          "Usuarios"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Usuario"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Usuario"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/Usuario"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Usuarios"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Usuarios/{id}": {
+      "get": {
+        "tags": [
+          "Usuarios"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Aluno": {
+        "required": [
+          "cpf"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nome": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "cpf": {
+            "maxLength": 11,
+            "minLength": 11,
+            "type": "string"
+          },
+          "telefone": {
+            "type": "string",
+            "nullable": true
+          },
+          "cep": {
+            "type": "string",
+            "nullable": true
+          },
+          "rua": {
+            "type": "string",
+            "nullable": true
+          },
+          "numero": {
+            "type": "string",
+            "nullable": true
+          },
+          "bairro": {
+            "type": "string",
+            "nullable": true
+          },
+          "cidade": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string",
+            "nullable": true
+          },
+          "tipoUsuario": {
+            "type": "string",
+            "nullable": true
+          },
+          "dataCadastro": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ativo": {
+            "type": "boolean"
+          },
+          "matricula": {
+            "type": "string",
+            "nullable": true
+          },
+          "turmaAtual": {
+            "type": "string",
+            "nullable": true
+          },
+          "matriculas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Matricula"
+            },
+            "nullable": true
+          },
+          "feedbacks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Coordenador": {
+        "required": [
+          "cpf"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nome": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "cpf": {
+            "maxLength": 11,
+            "minLength": 11,
+            "type": "string"
+          },
+          "telefone": {
+            "type": "string",
+            "nullable": true
+          },
+          "cep": {
+            "type": "string",
+            "nullable": true
+          },
+          "rua": {
+            "type": "string",
+            "nullable": true
+          },
+          "numero": {
+            "type": "string",
+            "nullable": true
+          },
+          "bairro": {
+            "type": "string",
+            "nullable": true
+          },
+          "cidade": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string",
+            "nullable": true
+          },
+          "tipoUsuario": {
+            "type": "string",
+            "nullable": true
+          },
+          "dataCadastro": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ativo": {
+            "type": "boolean"
+          },
+          "cursoResponsavel": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Curso": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "titulo": {
+            "type": "string",
+            "nullable": true
+          },
+          "descricao": {
+            "type": "string",
+            "nullable": true
+          },
+          "preco": {
+            "type": "number",
+            "format": "double"
+          },
+          "coordenadorId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "criadoPor": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Matricula": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dataSolicitacao": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "notaFinal": {
+            "type": "number",
+            "format": "double"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatusMatricula"
+          },
+          "alunoId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "aluno": {
+            "$ref": "#/components/schemas/Aluno"
+          },
+          "turmaId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "turma": {
+            "$ref": "#/components/schemas/Turma"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Professor": {
+        "required": [
+          "cpf"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nome": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "cpf": {
+            "maxLength": 11,
+            "minLength": 11,
+            "type": "string"
+          },
+          "telefone": {
+            "type": "string",
+            "nullable": true
+          },
+          "cep": {
+            "type": "string",
+            "nullable": true
+          },
+          "rua": {
+            "type": "string",
+            "nullable": true
+          },
+          "numero": {
+            "type": "string",
+            "nullable": true
+          },
+          "bairro": {
+            "type": "string",
+            "nullable": true
+          },
+          "cidade": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string",
+            "nullable": true
+          },
+          "tipoUsuario": {
+            "type": "string",
+            "nullable": true
+          },
+          "dataCadastro": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ativo": {
+            "type": "boolean"
+          },
+          "especialidade": {
+            "type": "string",
+            "nullable": true
+          },
+          "turmasAtribuidas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "feedbacks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "StatusMatricula": {
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "Turma": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nomeTurma": {
+            "type": "string",
+            "nullable": true
+          },
+          "dataCriacao": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cursoId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "professorId": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Usuario": {
+        "required": [
+          "cpf"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nome": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "cpf": {
+            "maxLength": 11,
+            "minLength": 11,
+            "type": "string"
+          },
+          "telefone": {
+            "type": "string",
+            "nullable": true
+          },
+          "cep": {
+            "type": "string",
+            "nullable": true
+          },
+          "rua": {
+            "type": "string",
+            "nullable": true
+          },
+          "numero": {
+            "type": "string",
+            "nullable": true
+          },
+          "bairro": {
+            "type": "string",
+            "nullable": true
+          },
+          "cidade": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string",
+            "nullable": true
+          },
+          "tipoUsuario": {
+            "type": "string",
+            "nullable": true
+          },
+          "dataCadastro": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ativo": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Alunos"
+    },
+    {
+      "name": "Coordenadores"
+    },
+    {
+      "name": "Cursos"
+    },
+    {
+      "name": "Professores"
+    },
+    {
+      "name": "Turmas"
+    },
+    {
+      "name": "Usuarios"
+    }
+  ]
+}

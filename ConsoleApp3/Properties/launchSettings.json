@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "Sistema Academico Integrado": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "",
+      //"launchUrl": "index.html","swagger"
+      "applicationUrl": "http://localhost:5000",
+      "hotReloadEnabled": true,
+      "jsWebView2Debugging": false
+    }
+  }
+}

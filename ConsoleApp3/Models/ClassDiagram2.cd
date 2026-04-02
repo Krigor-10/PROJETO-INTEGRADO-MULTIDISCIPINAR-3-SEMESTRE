@@ -1,0 +1,86 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="PlataformaEnsino.API.Models.Admin">
+    <Position X="8.25" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ABAAAgBAAAAAAAKIAAAAAEFAQQAABAAAEBAAAAIQAAA=</HashCode>
+      <FileName>Models\Admin.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="PlataformaEnsino.API.Models.Aluno">
+    <Position X="13.5" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAgAAEIAAAAAAAAECwAAAAAEAAIAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\Aluno.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="PlataformaEnsino.API.Models.Coordenador">
+    <Position X="10" Y="0.5" Width="1.5" />
+    <InheritanceLine Type="PlataformaEnsino.API.Models.Usuario" ManuallyRouted="true">
+      <Path>
+        <Point X="7.25" Y="0.5" />
+        <Point X="7.25" Y="0.26" />
+        <Point X="6.26" Y="0.26" />
+        <Point X="6.26" Y="0.18" />
+        <Point X="11.552" Y="0.18" />
+        <Point X="11.552" Y="3.619" />
+        <Point X="10.75" Y="3.619" />
+        <Point X="10.75" Y="3.531" />
+      </Path>
+    </InheritanceLine>
+    <TypeIdentifier>
+      <HashCode>ABBAAgAAAAAAAAKAAAAAAEBAAAAABAAAEAAAAAAAAAA=</HashCode>
+      <FileName>Models\Coordenador.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="PlataformaEnsino.API.Models.Curso">
+    <Position X="8.75" Y="5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAASAAAAAAABAAICAAAAQAAQAAAAAAAgQAAEAAAAABA=</HashCode>
+      <FileName>Models\Curso.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="PlataformaEnsino.API.Models.Matricula">
+    <Position X="6.75" Y="5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ABACAAAEAAAgAQIAACAAAAAAAABAAAAACAAQIAABAAA=</HashCode>
+      <FileName>Models\Matricula.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="PlataformaEnsino.API.Models.Modulo">
+    <Position X="12.25" Y="5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAACAAAAAQAAAAAAAAAgAAAAUAAAAAAAAAAAAAAAABA=</HashCode>
+      <FileName>Models\Modulo.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="PlataformaEnsino.API.Models.Professor">
+    <Position X="11.75" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAIIgQAAAAAAAAAAAAiAABAAAAAAAAAABAAAAAQAAA=</HashCode>
+      <FileName>Models\Professor.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="PlataformaEnsino.API.Models.Turma">
+    <Position X="10.5" Y="5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAACAAAAAQAAAAAAAAAkgAAAEAAAAAAAAAhABAAAAAg=</HashCode>
+      <FileName>Models\Turma.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="PlataformaEnsino.API.Models.Usuario">
+    <Position X="6.5" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>CAACAgAAgCAAAAAEAAEwAICAAAAAAAAAAAAAAAGBAAo=</HashCode>
+      <FileName>Models\Usuario.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Enum Name="PlataformaEnsino.API.Models.StatusMatricula">
+    <Position X="14" Y="5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>IAAAAAAQAAAAAAAACAAAAAAAAAAAAAAAAAAAAgAAAAA=</HashCode>
+      <FileName>Models\StatusMatricula.cs</FileName>
+    </TypeIdentifier>
+  </Enum>
+  <Font Name="Segoe UI" Size="9" />
+</ClassDiagram>

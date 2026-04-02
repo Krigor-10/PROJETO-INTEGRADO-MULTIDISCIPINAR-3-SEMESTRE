@@ -1,0 +1,250 @@
+[
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.AlunosController",
+    "Method": "GetAlunos",
+    "RelativePath": "api/Alunos",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": [
+      {
+        "Type": "System.Collections.Generic.IEnumerable\u00601[[PlataformaEnsino.API.Models.Aluno, Sistema Academico Integrado, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+        "MediaTypes": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "StatusCode": 200
+      }
+    ]
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.AlunosController",
+    "Method": "PostAluno",
+    "RelativePath": "api/Alunos",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "aluno",
+        "Type": "PlataformaEnsino.API.Models.Aluno",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": [
+      {
+        "Type": "PlataformaEnsino.API.Models.Aluno",
+        "MediaTypes": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "StatusCode": 200
+      }
+    ]
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.CoordenadoresController",
+    "Method": "GetCoordenadores",
+    "RelativePath": "api/Coordenadores",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": [
+      {
+        "Type": "System.Collections.Generic.IEnumerable\u00601[[PlataformaEnsino.API.Models.Coordenador, Sistema Academico Integrado, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+        "MediaTypes": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "StatusCode": 200
+      }
+    ]
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.CoordenadoresController",
+    "Method": "PostCoordenador",
+    "RelativePath": "api/Coordenadores",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "coordenador",
+        "Type": "PlataformaEnsino.API.Models.Coordenador",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": [
+      {
+        "Type": "PlataformaEnsino.API.Models.Coordenador",
+        "MediaTypes": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "StatusCode": 200
+      }
+    ]
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.CursosController",
+    "Method": "CriarCurso",
+    "RelativePath": "api/Cursos",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "curso",
+        "Type": "PlataformaEnsino.API.Models.Curso",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.CursosController",
+    "Method": "ListarTodos",
+    "RelativePath": "api/Cursos",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.CursosController",
+    "Method": "ObterCursoPorId",
+    "RelativePath": "api/Cursos/{id}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.ProfessoresController",
+    "Method": "GetProfessores",
+    "RelativePath": "api/Professores",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": [
+      {
+        "Type": "System.Collections.Generic.IEnumerable\u00601[[PlataformaEnsino.API.Models.Professor, Sistema Academico Integrado, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+        "MediaTypes": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "StatusCode": 200
+      }
+    ]
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.ProfessoresController",
+    "Method": "PostProfessor",
+    "RelativePath": "api/Professores",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "professor",
+        "Type": "PlataformaEnsino.API.Models.Professor",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": [
+      {
+        "Type": "PlataformaEnsino.API.Models.Professor",
+        "MediaTypes": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "StatusCode": 200
+      }
+    ]
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.TurmasController",
+    "Method": "GetTurmas",
+    "RelativePath": "api/Turmas",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.TurmasController",
+    "Method": "PostTurma",
+    "RelativePath": "api/Turmas",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "turma",
+        "Type": "PlataformaEnsino.API.Models.Turma",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.UsuariosController",
+    "Method": "CriarUsuario",
+    "RelativePath": "api/Usuarios",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "usuario",
+        "Type": "PlataformaEnsino.API.Models.Usuario",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.UsuariosController",
+    "Method": "ListarTodos",
+    "RelativePath": "api/Usuarios",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PlataformaEnsino.API.Controllers.UsuariosController",
+    "Method": "ObterUsuarioPorId",
+    "RelativePath": "api/Usuarios/{id}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  }
+]

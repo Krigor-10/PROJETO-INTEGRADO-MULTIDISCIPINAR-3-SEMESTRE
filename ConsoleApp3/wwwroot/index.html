@@ -1,0 +1,437 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EdTech — Gestão Acadêmica Integrada</title>
+    <meta name="description" content="Sistema de gestão acadêmica para administração de alunos, professores, turmas e matrículas.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <section id="login-screen" aria-labelledby="login-title">
+        <div class="login-card">
+            <header>
+                <h1 id="login-title" class="login-logo">Ed<span>Tech</span></h1>
+                <p class="login-subtitle">Plataforma de Gestão Acadêmica</p>
+            </header>
+
+            <fieldset style="border: none; padding: 0;">
+                <legend class="login-label">Perfil de acesso</legend>
+                <nav class="role-selector" aria-label="Seleção de perfil">
+                    <button type="button" class="role-btn active" data-role="admin" onclick="selectRole(this)">
+                        <span class="role-icon" aria-hidden="true">⚙️</span> Admin
+                    </button>
+                    <button type="button" class="role-btn" data-role="coordenador" onclick="selectRole(this)">
+                        <span class="role-icon" aria-hidden="true">👔</span> Coordenador
+                    </button>
+                    <button type="button" class="role-btn" data-role="professor" onclick="selectRole(this)">
+                        <span class="role-icon" aria-hidden="true">👨‍🏫</span> Professor
+                    </button>
+                    <button type="button" class="role-btn" data-role="aluno" onclick="selectRole(this)">
+                        <span class="role-icon" aria-hidden="true">👨‍🎓</span> Aluno
+                    </button>
+                </nav>
+            </fieldset>
+
+            <form id="login-form" onsubmit="event.preventDefault(); doLogin();">
+                <button type="submit" class="btn-login">Entrar no Sistema</button>
+            </form>
+        </div>
+    </section>
+
+    <div id="app-container" style="display:none;">
+
+        <aside class="sidebar">
+            <header class="sidebar-header">
+                <div class="sidebar-logo">Ed<span>Tech</span></div>
+            </header>
+
+            <nav class="nav-menu" aria-label="Menu principal">
+                <section class="nav-section">
+                    <h2 class="nav-section-title">Principal</h2>
+                    <a href="#" class="nav-item active" onclick="showPage('dashboard', this)" aria-label="Aceder ao Dashboard">📊 Dashboard</a>
+                    <a href="#" class="nav-item" onclick="showPage('alunos', this)" aria-label="Aceder à Gestão de Alunos">👥 Alunos</a>
+                    <a href="#" class="nav-item" onclick="showPage('professores', this)" aria-label="Aceder à Gestão de Professores">👨‍🏫 Professores</a>
+                    <a href="#" class="nav-item" onclick="showPage('coordenadores', this)" aria-label="Aceder à Gestão de Coordenadores">👔 Coordenadores</a>
+                    <a href="#" class="nav-item" onclick="showPage('cursos', this)" aria-label="Aceder à Gestão de Cursos">📚 Cursos</a>
+                    <a href="#" class="nav-item" onclick="showPage('matriculas', this)" aria-label="Aceder à Gestão de Matrículas">📋 Matrículas</a>
+                    <a href="#" class="nav-item" onclick="showPage('notas', this)" aria-label="Aceder ao Lançamento de Notas">📝 Notas</a>
+                    <a href="#" class="nav-item" onclick="showPage('horarios', this)" aria-label="Aceder à Grade de Horários">📅 Horários</a>
+                    <a href="#" class="nav-item" onclick="showPage('turmas', this)">🏫 Turmas</a>
+                </section>
+            </nav>
+
+            <footer class="sidebar-footer">
+                <button class="nav-item text-danger" onclick="logout()" style="background: transparent; border: none; width: 100%; text-align: left; cursor: pointer;">🚪 Sair</button>
+            </footer>
+        </aside>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <h2 id="current-page-title">Dashboard Acadêmico</h2>
+                <div class="user-profile">
+                    <span id="user-display-name">Administrador</span>
+                </div>
+            </header>
+
+            <article id="page-dashboard" class="page active">
+                <section class="stats-grid" aria-label="Resumo de estatísticas">
+                    <div class="stat-card">
+                        <h3>Total Alunos</h3>
+                        <p class="stat-value" id="total-alunos">0</p>
+                    </div>
+                </section>
+            </article>
+
+            <section id="page-alunos" class="page">
+                <header class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2>Gestão de Alunos</h2>
+                        <p>Administre os dados dos estudantes matriculados.</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="toggleForm('form-container-aluno')">+ Novo Aluno</button>
+                </header>
+
+                <div id="form-container-aluno" class="card mb-2" style="display: none;">
+                    <h3 class="mb-2">Cadastrar Novo Estudante</h3>
+                    <form id="form-aluno" onsubmit="event.preventDefault(); cadastrarAluno();">
+                        <div class="grid-form">
+                            <div class="form-group">
+                                <label for="aluno-nome">Nome Completo</label>
+                                <input type="text" id="aluno-nome" placeholder="Ex: Ana Beatriz" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="aluno-email">E-mail Acadêmico</label>
+                                <input type="email" id="aluno-email" placeholder="ana@escola.edu" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="aluno-cpf">CPF</label>
+                                <input type="text" id="aluno-cpf" placeholder="000.000.000-00" required>
+                            </div>
+                            <div class="form-group" style="display: flex; gap: 10px; align-items: flex-end;">
+                                <button type="submit" class="btn btn-primary" style="flex: 1;">Salvar no Banco</button>
+                                <button type="button" class="btn" style="background: #eee;" onclick="toggleForm('form-container-aluno')">Cancelar</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="table-responsive">
+                        <table aria-label="Lista de alunos matriculados">
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID</th>
+                                    <th scope="col">Nome</th>
+                                    <th scope="col">E-mail</th>
+                                    <th scope="col">CPF</th>
+                                    <th scope="col">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alunos-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="page-professores" class="page">
+                <header class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2>Gestão de Professores</h2>
+                        <p>Administre os docentes da instituição.</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="toggleForm('form-container-professor')">+ Novo Professor</button>
+                </header>
+
+                <section id="form-container-professor" class="card mb-2" style="display: none;" aria-labelledby="titulo-novo-professor">
+                    <h3 id="titulo-novo-professor" class="mb-2">Cadastrar Novo Professor</h3>
+                    <form id="form-professor" onsubmit="event.preventDefault(); cadastrarProfessor();">
+                        <fieldset class="grid-form" style="border: none; padding: 0; margin: 0;">
+                            <legend style="display: none;">Formulário para inserção de dados do novo professor</legend>
+
+                            <div class="form-group">
+                                <label for="professor-nome">Nome Completo</label>
+                                <input type="text" id="professor-nome" placeholder="Ex: João Silva" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="professor-email">E-mail Acadêmico</label>
+                                <input type="email" id="professor-email" placeholder="joao@escola.edu" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="professor-cpf">CPF</label>
+                                <input type="text" id="professor-cpf" placeholder="000.000.000-00" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="professor-especialidade">Especialidade / Disciplina</label>
+                                <input type="text" id="professor-especialidade" placeholder="Ex: Matemática" required>
+                            </div>
+
+                            <div class="form-group" style="display: flex; gap: 10px; align-items: flex-end; grid-column: 1 / -1;">
+                                <button type="submit" class="btn btn-primary" style="flex: 1;">Salvar Professor</button>
+                                <button type="button" class="btn" style="background: #eee;" onclick="toggleForm('form-container-professor')">Cancelar</button>
+                            </div>
+                        </fieldset>
+                    </form>
+                </section>
+
+                <div class="card">
+                    <div class="table-responsive">
+                        <table aria-label="Lista de professores">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Registro</th>
+                                    <th scope="col">Nome</th>
+                                    <th scope="col">E-mail</th>
+                                    <th scope="col">Especialidade</th>
+                                </tr>
+                            </thead>
+                            <tbody id="professores-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="page-matriculas" class="page" aria-labelledby="matriculas-title">
+                <header class="flex items-center justify-between mb-2">
+                    <h2 id="matriculas-title">Gestão de Matrículas</h2>
+                </header>
+
+                <article class="card mb-2" aria-labelledby="form-matricula-title">
+                    <header>
+                        <h3 id="form-matricula-title">Efetuar Nova Matrícula</h3>
+                        <p style="font-size: 13px; color: var(--muted);">Vincule um aluno a uma turma para gerar o registo académico.</p>
+                    </header>
+
+                    <form id="form-matricula" class="form-grid" onsubmit="event.preventDefault(); efetuarMatricula();" style="margin-top: 15px;">
+                        <div class="form-group">
+                            <label for="sel-aluno" class="form-label">Selecionar Aluno</label>
+                            <select id="sel-aluno" class="form-input" required aria-required="true"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sel-turma" class="form-label">Selecionar Turma</label>
+                            <select id="sel-turma" class="form-input" required aria-required="true"></select>
+                        </div>
+
+                        <div class="form-group full" style="display: flex; align-items: flex-end;">
+                            <button type="submit" class="btn btn-primary" aria-label="Confirmar e guardar a matrícula">
+                                💾 Salvar Matrícula
+                            </button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="card" aria-labelledby="lista-matriculas-title">
+                    <h3 id="lista-matriculas-title" class="mb-2">Matrículas Recentes</h3>
+                    <div class="table-responsive">
+                        <table aria-label="Lista de alunos matriculados nas turmas">
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID Matrícula</th>
+                                    <th scope="col">Aluno</th>
+                                    <th scope="col">Turma</th>
+                                    <th scope="col">Data</th>
+                                    <th scope="col">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="matriculas-list"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+
+            <section id="page-coordenadores" class="page">
+                <header class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2>Gestão de Coordenadores</h2>
+                        <p>Administre os coordenadores dos cursos.</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="toggleForm('form-container-coordenador')">+ Novo Coordenador</button>
+                </header>
+
+                <div id="form-container-coordenador" class="card mb-2" style="display: none;">
+                    <h3 class="mb-2">Cadastrar Novo Coordenador</h3>
+                    <form id="form-coordenador" onsubmit="event.preventDefault(); cadastrarCoordenador();">
+                        <div class="grid-form">
+                            <div class="form-group">
+                                <label for="coordenador-nome">Nome Completo</label>
+                                <input type="text" id="coordenador-nome" placeholder="Ex: Carlos Silva" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="coordenador-email">E-mail</label>
+                                <input type="email" id="coordenador-email" placeholder="carlos@escola.edu" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="coordenador-cpf">CPF</label>
+                                <input type="text" id="coordenador-cpf" placeholder="00000000000" required>
+                            </div>
+                            <div class="form-group" style="display: flex; gap: 10px; align-items: flex-end;">
+                                <button type="submit" class="btn btn-primary" style="flex: 1;">Salvar Coordenador</button>
+                                <button type="button" class="btn" style="background: #eee;" onclick="toggleForm('form-container-coordenador')">Cancelar</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+
+
+                <div class="card">
+                    <div class="table-responsive">
+                        <table aria-label="Lista de coordenadores">
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID</th>
+                                    <th scope="col">Nome</th>
+                                    <th scope="col">E-mail</th>
+                                    <th scope="col">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="coordenadores-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="page-cursos" class="page">
+                <header class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2>Gestão de Cursos</h2>
+                        <p>Administre os cursos oferecidos pela instituição.</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="toggleForm('form-container-curso')">+ Novo Curso</button>
+                </header>
+
+                <div id="form-container-curso" class="card mb-2" style="display: none;">
+                    <h3 class="mb-2">Cadastrar Novo Curso</h3>
+                    <form id="form-curso" onsubmit="event.preventDefault(); cadastrarCurso();">
+                        <div class="grid-form">
+                            <div class="form-group">
+                                <label for="curso-titulo">Título do Curso</label>
+                                <input type="text" id="curso-titulo" placeholder="Ex: Análise e Desenvolvimento de Sistemas" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="curso-descricao">Descrição</label>
+                                <input type="text" id="curso-descricao" placeholder="Descrição do curso" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="curso-preco">Preço (R$)</label>
+                                <input type="number" id="curso-preco" step="0.01" placeholder="0.00" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="curso-coordenador">ID do Coordenador</label>
+                                <input type="number" id="curso-coordenador" placeholder="Ex: 1" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="curso-criador">ID do Admin (Criador)</label>
+                                <input type="number" id="curso-criador" placeholder="Ex: 1" required>
+                            </div>
+                            <div class="form-group" style="display: flex; gap: 10px; align-items: flex-end;">
+                                <button type="submit" class="btn btn-primary" style="flex: 1;">Salvar Curso</button>
+                                <button type="button" class="btn" style="background: #eee;" onclick="toggleForm('form-container-curso')">Cancelar</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="table-responsive">
+                        <table aria-label="Lista de cursos">
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID</th>
+                                    <th scope="col">Título</th>
+                                    <th scope="col">Preço</th>
+                                    <th scope="col">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cursos-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="page-turmas" class="page" aria-labelledby="turmas-title">
+                <header class="flex items-center justify-between mb-2">
+                    <h2 id="turmas-title">Gestão de Turmas</h2>
+                    <button type="button" class="btn btn-primary admin-only" onclick="toggleForm('form-container-turma'); preencherSelectsTurma()">
+                        + Nova Turma
+                    </button>
+                </header>
+
+                <article id="form-container-turma" class="card mb-2" style="display: none;" aria-labelledby="form-turma-title">
+                    <header>
+                        <h3 id="form-turma-title">Cadastrar Nova Turma</h3>
+                        <p style="font-size: 13px; color: var(--muted);">Crie uma nova turma vinculando-a a um curso e professor existentes.</p>
+                    </header>
+
+                    <form id="form-turma" class="form-grid" onsubmit="event.preventDefault(); cadastrarTurma();" style="margin-top: 15px;">
+                        <div class="form-group">
+                            <label for="turma-nome" class="form-label">Nome da Turma</label>
+                            <input type="text" id="turma-nome" class="form-input" placeholder="Ex: Turma A - Manhã" required aria-required="true">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="turma-curso" class="form-label">Curso Vinculado</label>
+                            <select id="turma-curso" class="form-input" required aria-required="true">
+                                <option value="">Carregando cursos...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="turma-professor" class="form-label">Professor Responsável</label>
+                            <select id="turma-professor" class="form-input" required aria-required="true">
+                                <option value="">Carregando professores...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group full" style="display: flex; gap: 10px; align-items: flex-end;">
+                            <button type="submit" class="btn btn-primary" style="flex: 1;" aria-label="Confirmar e guardar a turma">
+                                💾 Salvar Turma
+                            </button>
+                            <button type="button" class="btn" style="background: var(--border); color: var(--text);" onclick="toggleForm('form-container-turma')">
+                                Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="card" aria-labelledby="lista-turmas-title">
+                    <h3 id="lista-turmas-title" class="mb-2">Lista de Turmas Cadastradas</h3>
+                    <div class="table-responsive">
+                        <table aria-label="Lista de turmas cadastradas com cursos e professores">
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID</th>
+                                    <th scope="col">Nome da Turma</th>
+                                    <th scope="col">Curso</th>
+                                    <th scope="col">Professor Responsável</th>
+                                </tr>
+                            </thead>
+                            <tbody id="turmas-list"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+
+
+            <section id="page-notas" class="page">
+                <h2>Lançamento de Notas</h2>
+                <p>Módulo em desenvolvimento...</p>
+            </section>
+
+            <section id="page-horarios" class="page">
+                <h2>Grade de Horários</h2>
+                <p>Módulo em desenvolvimento...</p>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

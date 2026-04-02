@@ -1,0 +1,6 @@
+wwwroot\app.js
+wwwroot\style.css
+wwwroot\index.html
+C:\Users\Krigor\source\repos\ConsoleApp3\ConsoleApp3\wwwroot\app.js
+C:\Users\Krigor\source\repos\ConsoleApp3\ConsoleApp3\wwwroot\style.css
+C:\Users\Krigor\source\repos\ConsoleApp3\ConsoleApp3\wwwroot\index.html
