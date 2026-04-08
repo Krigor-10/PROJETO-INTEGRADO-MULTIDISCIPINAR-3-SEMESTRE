@@ -1,0 +1,79 @@
+using PlataformaEnsino.API.Interfaces;
+using PlataformaEnsino.API.Models;
+
+namespace PlataformaEnsino.API.Services;
+
+public class CursoService : ICursoService
+{
+    private readonly IGenericRepository<Curso> _cursoRepository;
+    private readonly IGenericRepository<Coordenador> _coordenadorRepository;
+
+    public CursoService(
+        IGenericRepository<Curso> cursoRepository,
+        IGenericRepository<Coordenador> coordenadorRepository)
+    {
+        _cursoRepository = cursoRepository;
+        _coordenadorRepository = coordenadorRepository;
+    }
+
+    public async Task<Curso> CriarCursoAsync(Curso novoCurso)
+    {
+        ValidarCurso(novoCurso);
+
+        await _cursoRepository.AdicionarAsync(novoCurso);
+        await _cursoRepository.SalvarAlteracoesAsync();
+
+        return novoCurso;
+    }
+
+    public async Task<Curso> ObterCursoPorIdAsync(int id)
+    {
+        return await _cursoRepository.ObterPorIdAsync(id)
+            ?? throw new KeyNotFoundException("Curso não encontrado.");
+    }
+
+    public async Task<IEnumerable<Curso>> ListarTodosCursosAsync()
+    {
+        return await _cursoRepository.ObterTodosAsync();
+    }
+
+    public async Task AdicionarModuloAsync(int cursoId, Modulo novoModulo)
+    {
+        ArgumentNullException.ThrowIfNull(novoModulo);
+
+        var curso = await _cursoRepository.ObterPorIdAsync(cursoId)
+            ?? throw new KeyNotFoundException("Curso não encontrado para adicionar o módulo.");
+
+        curso.AdicionarModulo(novoModulo);
+        _cursoRepository.Atualizar(curso);
+        await _cursoRepository.SalvarAlteracoesAsync();
+    }
+
+    public async Task AtribuirCoordenadorAsync(int cursoId, int coordenadorId)
+    {
+        var curso = await _cursoRepository.ObterPorIdAsync(cursoId)
+            ?? throw new KeyNotFoundException("Curso não encontrado.");
+
+        var coordenador = await _coordenadorRepository.ObterPorIdAsync(coordenadorId)
+            ?? throw new KeyNotFoundException("Coordenador não encontrado.");
+
+        curso.AtribuirCoordenador(coordenador);
+        _cursoRepository.Atualizar(curso);
+        await _cursoRepository.SalvarAlteracoesAsync();
+    }
+
+    private static void ValidarCurso(Curso curso)
+    {
+        ArgumentNullException.ThrowIfNull(curso);
+
+        if (string.IsNullOrWhiteSpace(curso.Titulo))
+        {
+            throw new ArgumentException("O título do curso é obrigatório.");
+        }
+
+        if (curso.Preco < 0)
+        {
+            throw new ArgumentException("O preço não pode ser negativo.");
+        }
+    }
+}
