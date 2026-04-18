@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace PlataformaEnsino.API.Models;
 
@@ -14,6 +16,30 @@ public class Modulo
 
     public int CursoId { get; set; }
     public Curso? Curso { get; set; }
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<ConteudoDidatico> ConteudosDidaticos { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<Avaliacao> Avaliacoes { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<LancamentoNotaAluno> LancamentosNota { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<ProgressoConteudoAluno> ProgressosConteudo { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<ProgressoModuloAluno> ProgressosAlunos { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<MarcoProgressoAluno> MarcosProgresso { get; set; } = new();
 
     public void AlterarTitulo(string novoTitulo)
     {

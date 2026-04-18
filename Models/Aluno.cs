@@ -5,7 +5,7 @@ namespace PlataformaEnsino.API.Models
 {
     public class Aluno : Usuario
     {
-        public string Matricula { get; set; }
+        public string Matricula { get; set; } = string.Empty;
         public string TurmaAtual { get; set; } = "Não atribuída";
 
         // Lista que o Entity Framework vai usar para as notas

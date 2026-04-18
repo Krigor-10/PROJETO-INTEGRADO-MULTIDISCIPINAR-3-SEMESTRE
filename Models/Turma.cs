@@ -28,6 +28,14 @@ public class Turma
     [ValidateNever]
     public List<Matricula> Matriculas { get; set; } = new();
 
+    [JsonIgnore]
+    [ValidateNever]
+    public List<ConteudoDidatico> ConteudosDidaticos { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<Avaliacao> Avaliacoes { get; set; } = new();
+
     public void DefinirProfessor(Professor professor)
     {
         ArgumentNullException.ThrowIfNull(professor);

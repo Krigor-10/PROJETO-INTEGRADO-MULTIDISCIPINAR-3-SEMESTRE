@@ -6,6 +6,7 @@ namespace PlataformaEnsino.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
 public class UsuariosController : ControllerBase
 {
     private readonly IUsuarioService _usuarioService;

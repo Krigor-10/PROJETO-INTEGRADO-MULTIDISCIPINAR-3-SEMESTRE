@@ -50,38 +50,16 @@ builder.Services.AddOpenApi("v1", options =>
     });
 });
 
-/*builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "API V1",
-        Version = "v1"
-    });
-
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "Informe o token JWT assim: Bearer {seu token}",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT"
-    });
-
-    options.AddSecurityRequirement((document) => new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecuritySchemeReference("Bearer"),
-            new List<string>()
-        }
-    });
-});*/
 
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+builder.Services.AddScoped<IConteudoDidaticoRepository, ConteudoDidaticoRepository>();
 builder.Services.AddScoped<IMatriculaRepository, MatriculaRepository>();
+builder.Services.AddScoped<IModuloRepository, ModuloRepository>();
+builder.Services.AddScoped<IConteudoDidaticoService, ConteudoDidaticoService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<ICursoService, CursoService>();
 builder.Services.AddScoped<IMatriculaService, MatriculaService>();
+builder.Services.AddScoped<IModuloService, ModuloService>();
 builder.Services.AddScoped<ITurmaService, TurmaService>();
 builder.Services.AddScoped<ITurmaRepository, TurmaRepository>();
 
@@ -112,19 +90,39 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        var allowedOrigins = builder.Configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? ["http://localhost:5000", "https://localhost:5001"];
+
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 var app = builder.Build();
+
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<PlataformaContext>();
+    await dbContext.Database.MigrateAsync();
+
+    if (app.Environment.IsDevelopment())
+    {
+        await DevelopmentDataSeeder.SeedAsync(dbContext);
+    }
+}
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseApiExceptionMiddleware();
 
-/*app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "API V1");
-});*/
 
-app.UseCors("FrontendLocal");
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
@@ -135,5 +133,7 @@ app.MapScalarApiReference(options =>
 {
     options.Title = "PlataformaEnsino API";
 });
+
+app.MapFallbackToFile("index.html");
 
 app.Run();

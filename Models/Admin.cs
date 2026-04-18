@@ -16,7 +16,8 @@ namespace PlataformaEnsino.API.Models
 
         public void AlterarStatusUsuario(Usuario usuario, bool estadoAtivo)
         {
-            usuario.Ativo = estadoAtivo;
+            if (estadoAtivo) usuario.Ativar();
+            else usuario.Desativar();
             Console.WriteLine($"[Sistema] ADMIN {Nome} alterou o estado de {usuario.Nome} para {(estadoAtivo ? "Ativo" : "Inativo")}.");
         }
 

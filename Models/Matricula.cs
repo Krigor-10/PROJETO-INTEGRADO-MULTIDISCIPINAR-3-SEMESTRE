@@ -1,16 +1,18 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace PlataformaEnsino.API.Models;
 
 public class Matricula
 {
     public int Id { get; set; }
-    public DateTime DataSolicitacao { get; set; } = DateTime.UtcNow;
+    public DateTime DataSolicitacao { get; private set; } = DateTime.UtcNow;
 
     [Range(0, 10)]
-    public decimal NotaFinal { get; set; }
+    public decimal NotaFinal { get; private set; }
 
-    public StatusMatricula Status { get; set; } = StatusMatricula.Pendente;
+    public StatusMatricula Status { get; private set; } = StatusMatricula.Pendente;
 
     public int AlunoId { get; set; }
     public Aluno? Aluno { get; set; }
@@ -18,8 +20,59 @@ public class Matricula
     public int CursoId { get; set; }
     public Curso? Curso { get; set; }
 
-    public int? TurmaId { get; set; }
+    public int? TurmaId { get; private set; }
     public Turma? Turma { get; set; }
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<TentativaAvaliacao> TentativasAvaliacao { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<LancamentoNotaAluno> LancamentosNota { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<ProgressoConteudoAluno> ProgressosConteudo { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<ProgressoModuloAluno> ProgressosModulo { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<ProgressoCursoAluno> ProgressosCurso { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<MarcoProgressoAluno> MarcosProgresso { get; set; } = new();
+
+    public void RegistrarSolicitacao(DateTime? dataSolicitacao = null)
+    {
+        DataSolicitacao = dataSolicitacao ?? DateTime.UtcNow;
+    }
+
+    public void VincularTurma(int turmaId)
+    {
+        if (turmaId <= 0)
+        {
+            throw new ArgumentException("A turma informada e invalida.");
+        }
+
+        TurmaId = turmaId;
+    }
+
+    public void AprovarComTurma(int turmaId, int cursoId)
+    {
+        if (cursoId <= 0)
+        {
+            throw new ArgumentException("O curso informado e invalido.");
+        }
+
+        VincularTurma(turmaId);
+        CursoId = cursoId;
+        Aprovar();
+    }
 
     public void Aprovar() => Status = StatusMatricula.Aprovada;
     public void Rejeitar() => Status = StatusMatricula.Rejeitada;
@@ -38,5 +91,10 @@ public class Matricula
         }
 
         NotaFinal = nota;
+    }
+
+    public void ZerarNotaFinal()
+    {
+        NotaFinal = 0;
     }
 }

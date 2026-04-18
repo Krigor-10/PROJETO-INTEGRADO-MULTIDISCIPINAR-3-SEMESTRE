@@ -37,14 +37,12 @@ public class MatriculaService : IMatriculaService
         var novaMatricula = new Matricula
         {
             AlunoId = alunoId,
-            TurmaId = turmaId,
             CursoId = turma.CursoId,
             Aluno = aluno,
-            Turma = turma,
-            DataSolicitacao = DateTime.UtcNow,
-            Status = StatusMatricula.Pendente,
-            NotaFinal = 0
+            Turma = turma
         };
+        novaMatricula.VincularTurma(turmaId);
+        novaMatricula.RegistrarSolicitacao(DateTime.UtcNow);
 
         await _matriculaRepository.AdicionarAsync(novaMatricula);
         await _matriculaRepository.SalvarAlteracoesAsync();
@@ -94,9 +92,7 @@ public class MatriculaService : IMatriculaService
         var turma = await _turmaRepository.ObterPorIdAsync(turmaId)
             ?? throw new KeyNotFoundException("Turma não encontrada.");
 
-        matricula.TurmaId = turmaId;
-        matricula.CursoId = turma.CursoId;
-        matricula.Aprovar();
+        matricula.AprovarComTurma(turmaId, turma.CursoId);
 
         _matriculaRepository.Atualizar(matricula);
         await _matriculaRepository.SalvarAlteracoesAsync();

@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using PlataformaEnsino.API.Data;
 using PlataformaEnsino.API.Interfaces;
 using PlataformaEnsino.API.Models;
 
@@ -5,13 +7,16 @@ namespace PlataformaEnsino.API.Services;
 
 public class CursoService : ICursoService
 {
+    private readonly PlataformaContext _context;
     private readonly IGenericRepository<Curso> _cursoRepository;
     private readonly IGenericRepository<Coordenador> _coordenadorRepository;
 
     public CursoService(
+        PlataformaContext context,
         IGenericRepository<Curso> cursoRepository,
         IGenericRepository<Coordenador> coordenadorRepository)
     {
+        _context = context;
         _cursoRepository = cursoRepository;
         _coordenadorRepository = coordenadorRepository;
     }
@@ -35,6 +40,16 @@ public class CursoService : ICursoService
     public async Task<IEnumerable<Curso>> ListarTodosCursosAsync()
     {
         return await _cursoRepository.ObterTodosAsync();
+    }
+
+    public async Task<IEnumerable<Curso>> ListarCursosPorProfessorAsync(int professorId)
+    {
+        return await _context.Cursos
+            .Where(curso => _context.Turmas.Any(turma =>
+                turma.ProfessorId == professorId &&
+                turma.CursoId == curso.Id))
+            .OrderBy(curso => curso.Titulo)
+            .ToListAsync();
     }
 
     public async Task AdicionarModuloAsync(int cursoId, Modulo novoModulo)

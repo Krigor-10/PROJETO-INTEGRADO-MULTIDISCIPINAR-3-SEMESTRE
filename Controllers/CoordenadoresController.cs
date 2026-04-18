@@ -9,6 +9,7 @@ namespace PlataformaEnsino.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
     public class CoordenadoresController : ControllerBase
     {
         private readonly PlataformaContext _context;

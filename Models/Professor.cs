@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace PlataformaEnsino.API.Models;
 
@@ -11,6 +13,22 @@ public class Professor : Usuario
     public List<string> TurmasAtribuidas { get; set; } = new();
     public List<string> Feedbacks { get; set; } = new();
 
+    [JsonIgnore]
+    [ValidateNever]
+    public List<QuestaoBanco> QuestoesBanco { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<ConteudoDidatico> ConteudosDidaticos { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<Avaliacao> AvaliacoesPublicadas { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<LancamentoNotaAluno> LancamentosNota { get; set; } = new();
+
     public void AtribuirNota(Matricula matricula, decimal nota)
     {
         ArgumentNullException.ThrowIfNull(matricula);
@@ -20,7 +38,7 @@ public class Professor : Usuario
     public void ExcluirNota(Matricula matricula)
     {
         ArgumentNullException.ThrowIfNull(matricula);
-        matricula.NotaFinal = 0;
+        matricula.ZerarNotaFinal();
     }
 
     public void PostarMaterial(string tituloMaterial, string turma)

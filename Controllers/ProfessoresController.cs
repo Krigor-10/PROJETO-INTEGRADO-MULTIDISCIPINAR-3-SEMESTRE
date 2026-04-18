@@ -7,6 +7,7 @@ namespace PlataformaEnsino.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Coordenador")]
     public class ProfessoresController : ControllerBase
     {
         // 1. Alteramos o nome aqui para PlataformaContext

@@ -46,12 +46,12 @@ public abstract class Usuario
     [StringLength(2)]
     public string Estado { get; set; } = string.Empty;
 
-    public string TipoUsuario { get; set; } = string.Empty;
-    public DateTime DataCadastro { get; set; } = DateTime.UtcNow;
+    public string TipoUsuario { get; private set; } = string.Empty;
+    public DateTime DataCadastro { get; private set; } = DateTime.UtcNow;
 
-    public string SenhaHash { get; set; } = string.Empty;
+    public string SenhaHash { get; private set; } = string.Empty;
 
-    public bool Ativo { get; set; } = true;
+    public bool Ativo { get; private set; } = true;
 
     public void AlterarDados(string nome, string email, string telefone, string cep, string rua, string numero, string bairro, string cidade, string estado)
     {
@@ -64,6 +64,43 @@ public abstract class Usuario
         Bairro = bairro;
         Cidade = cidade;
         Estado = estado;
+    }
+
+    public void ConfigurarAcesso(string tipoUsuario, string senhaHash, bool ativo = true)
+    {
+        if (string.IsNullOrWhiteSpace(tipoUsuario))
+        {
+            throw new ArgumentException("O tipo de usuario e obrigatorio.");
+        }
+
+        if (string.IsNullOrWhiteSpace(senhaHash))
+        {
+            throw new ArgumentException("A senha hash e obrigatoria.");
+        }
+
+        TipoUsuario = tipoUsuario.Trim();
+        SenhaHash = senhaHash;
+        Ativo = ativo;
+    }
+
+    public void AtualizarSenhaHash(string senhaHash)
+    {
+        if (string.IsNullOrWhiteSpace(senhaHash))
+        {
+            throw new ArgumentException("A senha hash e obrigatoria.");
+        }
+
+        SenhaHash = senhaHash;
+    }
+
+    public void Ativar()
+    {
+        Ativo = true;
+    }
+
+    public void Desativar()
+    {
+        Ativo = false;
     }
 
     public virtual string ExibirDados()

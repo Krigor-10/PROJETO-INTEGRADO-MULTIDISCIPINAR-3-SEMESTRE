@@ -6,7 +6,6 @@ using PlataformaEnsino.API.DTOs;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.AspNetCore.Authorization;
 
 namespace PlataformaEnsino.API.Controllers;
 
@@ -17,31 +16,28 @@ public class AuthController : ControllerBase
     private readonly PlataformaContext _context;
     private readonly IConfiguration _configuration;
 
-
     public AuthController(PlataformaContext context, IConfiguration configuration)
     {
         _context = context;
         _configuration = configuration;
     }
-    [HttpPost("login")]
+
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
-        if (string.IsNullOrWhiteSpace(dto.Login) || string.IsNullOrWhiteSpace(dto.Senha))
+        if (string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Senha))
         {
-            return BadRequest(new { mensagem = "Login e senha são obrigatórios." });
+            return BadRequest(new { mensagem = "E-mail e senha são obrigatórios." });
         }
 
-        var loginNormalizado = dto.Login.Trim();
-        var cpfNumerico = new string(loginNormalizado.Where(char.IsDigit).ToArray());
+        var emailNormalizado = dto.Email.Trim().ToLower();
 
-        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u =>
-            u.Email == loginNormalizado ||
-            u.Cpf == cpfNumerico);
+        var usuario = await _context.Usuarios
+            .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == emailNormalizado);
 
         if (usuario == null || string.IsNullOrWhiteSpace(usuario.SenhaHash) || !BCrypt.Net.BCrypt.Verify(dto.Senha, usuario.SenhaHash))
         {
-            return Unauthorized(new { mensagem = "Login ou senha inválidos." });
+            return Unauthorized(new { mensagem = "E-mail ou senha inválidos." });
         }
 
         if (!usuario.Ativo)
@@ -50,17 +46,19 @@ public class AuthController : ControllerBase
         }
 
         var claims = new List<Claim>
-    {
-        new Claim(JwtRegisteredClaimNames.Sub, usuario.Id.ToString()),
-        new Claim(JwtRegisteredClaimNames.Email, usuario.Email ?? string.Empty),
-        new Claim(ClaimTypes.Name, usuario.Nome ?? string.Empty),
-        new Claim(ClaimTypes.Role, usuario.TipoUsuario ?? string.Empty),
-        new Claim("usuarioId", usuario.Id.ToString())
-    };
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, usuario.Id.ToString()),
+            new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, usuario.Email ?? string.Empty),
+            new Claim(ClaimTypes.Name, usuario.Nome ?? string.Empty),
+            new Claim(ClaimTypes.Role, usuario.TipoUsuario ?? string.Empty),
+            new Claim("usuarioId", usuario.Id.ToString())
+        };
 
         var key = _configuration["Jwt:Key"]!;
         var issuer = _configuration["Jwt:Issuer"]!;
         var audience = _configuration["Jwt:Audience"]!;
+        var expireMinutes = _configuration.GetValue<int>("Jwt:ExpireMinutes", 120);
 
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
@@ -69,7 +67,7 @@ public class AuthController : ControllerBase
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(120),
+            expires: DateTime.UtcNow.AddMinutes(expireMinutes),
             signingCredentials: credentials
         );
 

@@ -16,4 +16,13 @@ public class TurmaRepository : GenericRepository<Turma>, ITurmaRepository
         return await Context.Turmas
             .AnyAsync(t => t.NomeTurma == nomeTurma && t.CursoId == cursoId);
     }
+
+    public async Task<List<Turma>> ObterPorProfessorAsync(int professorId)
+    {
+        return await Context.Turmas
+            .Where(turma => turma.ProfessorId == professorId)
+            .OrderBy(turma => turma.CursoId)
+            .ThenBy(turma => turma.NomeTurma)
+            .ToListAsync();
+    }
 }

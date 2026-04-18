@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlataformaEnsino.API.DTOs;
 using PlataformaEnsino.API.Interfaces;
@@ -17,6 +19,7 @@ public class TurmasController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,Coordenador")]
     public async Task<IActionResult> CriarTurma([FromBody] CriarTurmaDto dto)
     {
         if (!ModelState.IsValid)
@@ -100,5 +103,35 @@ public class TurmasController : ControllerBase
         });
 
         return Ok(response);
+    }
+
+    [HttpGet("minhas")]
+    [Authorize(Roles = "Professor")]
+    public async Task<IActionResult> ListarMinhasTurmas()
+    {
+        var professorId = ObterProfessorId();
+        if (!professorId.HasValue)
+        {
+            return Unauthorized(new { mensagem = "Nao foi possivel identificar o professor autenticado." });
+        }
+
+        var turmas = await _turmaService.ListarTurmasPorProfessorAsync(professorId.Value);
+
+        var response = turmas.Select(t => new TurmaResponseDto
+        {
+            Id = t.Id,
+            NomeTurma = t.NomeTurma,
+            DataCriacao = t.DataCriacao,
+            CursoId = t.CursoId,
+            ProfessorId = t.ProfessorId
+        });
+
+        return Ok(response);
+    }
+
+    private int? ObterProfessorId()
+    {
+        var rawId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("usuarioId");
+        return int.TryParse(rawId, out var professorId) ? professorId : null;
     }
 }

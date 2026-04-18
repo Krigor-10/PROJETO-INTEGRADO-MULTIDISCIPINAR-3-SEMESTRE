@@ -1,0 +1,11 @@
+namespace PlataformaEnsino.API.DTOs;
+
+public class CursoResponseDto
+{
+    public int Id { get; set; }
+    public string Titulo { get; set; } = string.Empty;
+    public string Descricao { get; set; } = string.Empty;
+    public decimal Preco { get; set; }
+    public int? CoordenadorId { get; set; }
+    public int CriadoPor { get; set; }
+}
