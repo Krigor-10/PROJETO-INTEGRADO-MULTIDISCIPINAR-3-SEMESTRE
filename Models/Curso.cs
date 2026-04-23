@@ -52,6 +52,12 @@ public class Curso
         Coordenador = coordenador;
     }
 
+    public void RemoverCoordenador()
+    {
+        CoordenadorId = null;
+        Coordenador = null;
+    }
+
     public void AdicionarModulo(Modulo modulo)
     {
         ArgumentNullException.ThrowIfNull(modulo);

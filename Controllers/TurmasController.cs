@@ -129,6 +129,14 @@ public class TurmasController : ControllerBase
         return Ok(response);
     }
 
+    [HttpPut("{id:int}/professor")]
+    [Authorize(Roles = "Admin,Coordenador")]
+    public async Task<IActionResult> AtribuirProfessor(int id, [FromBody] int professorId)
+    {
+        await _turmaService.AtribuirProfessorAsync(id, professorId);
+        return Ok(new { mensagem = "Professor atribuido a turma com sucesso." });
+    }
+
     private int? ObterProfessorId()
     {
         var rawId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("usuarioId");

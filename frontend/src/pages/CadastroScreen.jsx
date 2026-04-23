@@ -287,7 +287,7 @@ export default function CadastroScreen({ isDemoMode, onNavigate }) {
                 {status === "pending" ? "Enviando..." : "Enviar solicitacao"}
               </button>
 
-              <button className="ghost-button" type="button" onClick={() => onNavigate("/login")}>
+              <button className="button button--secondary" type="button" onClick={() => onNavigate("/login")}>
                 Ja tenho acesso
               </button>
             </div>

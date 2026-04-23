@@ -110,7 +110,7 @@ export default function LoginScreen({
             <div className="demo-mode-panel__actions">
               {DEMO_ACCOUNTS.map((account) => (
                 <button
-                  className="ghost-button demo-entry-button"
+                  className="button button--secondary demo-entry-button"
                   key={account.key}
                   onClick={() => onDemoSessionStart(account.key)}
                   type="button"
@@ -127,7 +127,7 @@ export default function LoginScreen({
 
             {isDemoMode && canDisableDemoMode ? (
               <div className="demo-mode-panel__footer">
-                <button className="ghost-button ghost-button--compact" onClick={() => onDemoModeExit("/login")} type="button">
+                <button className="button button--secondary button--compact" onClick={() => onDemoModeExit("/login")} type="button">
                   Voltar ao modo real
                 </button>
               </div>
@@ -136,7 +136,7 @@ export default function LoginScreen({
 
           <footer className="auth-card__footer">
             <span>Ainda nao tem conta?</span>
-            <button className="ghost-button ghost-button--compact" type="button" onClick={() => onNavigate("/cadastro")}>
+            <button className="button button--secondary button--compact" type="button" onClick={() => onNavigate("/cadastro")}>
               Solicitar matricula
             </button>
           </footer>

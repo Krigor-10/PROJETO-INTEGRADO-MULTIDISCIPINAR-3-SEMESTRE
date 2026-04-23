@@ -35,7 +35,7 @@ export default function FeaturedCoursesCarousel({ courses, onNavigate }) {
           <div className="course-carousel__actions">
             <button
               aria-label="Ver cursos anteriores"
-              className="ghost-button ghost-button--compact course-carousel__control"
+              className="button button--secondary button--compact course-carousel__control"
               type="button"
               onClick={() => scrollSlides(-1)}
             >
@@ -43,7 +43,7 @@ export default function FeaturedCoursesCarousel({ courses, onNavigate }) {
             </button>
             <button
               aria-label="Ver proximos cursos"
-              className="ghost-button ghost-button--compact course-carousel__control"
+              className="button button--secondary button--compact course-carousel__control"
               type="button"
               onClick={() => scrollSlides(1)}
             >
@@ -76,7 +76,7 @@ export default function FeaturedCoursesCarousel({ courses, onNavigate }) {
             <div className="course-card__footer">
               <strong>{formatMoney(course.preco)}</strong>
               <button
-                className="ghost-button ghost-button--compact"
+                className="button button--secondary button--compact"
                 type="button"
                 onClick={() => onNavigate("/cadastro")}
               >

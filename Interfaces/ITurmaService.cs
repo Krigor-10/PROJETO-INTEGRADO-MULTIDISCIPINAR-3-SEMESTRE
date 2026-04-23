@@ -8,4 +8,5 @@ public interface ITurmaService
     Task<Turma> ObterTurmaPorIdAsync(int id);
     Task<IEnumerable<Turma>> ListarTurmasAsync();
     Task<IEnumerable<Turma>> ListarTurmasPorProfessorAsync(int professorId);
+    Task AtribuirProfessorAsync(int turmaId, int professorId);
 }

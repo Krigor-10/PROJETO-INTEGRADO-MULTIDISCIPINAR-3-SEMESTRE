@@ -17,7 +17,7 @@ export default function GlobalHeader({ hasSession, isDemoMode, onNavigate }) {
 
         <nav className="global-header__nav" aria-label="Navegacao global">
           {PUBLIC_NAV_LINKS.map((item) => (
-            <a className="global-header__nav-link" href={item.href} key={item.href}>
+            <a className="button button--secondary global-header__nav-link" href={item.href} key={item.href}>
               {item.label}
             </a>
           ))}
@@ -36,14 +36,14 @@ export default function GlobalHeader({ hasSession, isDemoMode, onNavigate }) {
                     : "Continue do ponto onde voce parou."}
                 </span>
               </div>
-              <RouteLink className="ghost-button global-header__action" onNavigate={onNavigate} to="/app">
+              <RouteLink className="button button--secondary global-header__action" onNavigate={onNavigate} to="/app">
                 Abrir painel
               </RouteLink>
             </>
           ) : (
             <>
               {isDemoMode ? <StatusPill tone="warning">Modo demo</StatusPill> : null}
-              <RouteLink className="ghost-button global-header__action" onNavigate={onNavigate} to="/login">
+              <RouteLink className="button button--secondary global-header__action" onNavigate={onNavigate} to="/login">
                 Entrar
               </RouteLink>
               <RouteLink className="solid-button global-header__action global-header__action--wide" onNavigate={onNavigate} to="/cadastro">

@@ -92,7 +92,16 @@ public class MatriculaService : IMatriculaService
         var turma = await _turmaRepository.ObterPorIdAsync(turmaId)
             ?? throw new KeyNotFoundException("Turma não encontrada.");
 
-        matricula.AprovarComTurma(turmaId, turma.CursoId);
+        if (matricula.CursoId != turma.CursoId)
+        {
+            throw new InvalidOperationException("A turma selecionada nao pertence ao curso solicitado pelo aluno.");
+        }
+
+        var aluno = await _alunoRepository.ObterPorIdAsync(matricula.AlunoId)
+            ?? throw new KeyNotFoundException("Aluno não encontrado.");
+
+        matricula.AprovarComTurma(turmaId, matricula.CursoId);
+        aluno.TurmaAtual = turma.NomeTurma;
 
         _matriculaRepository.Atualizar(matricula);
         await _matriculaRepository.SalvarAlteracoesAsync();

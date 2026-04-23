@@ -53,6 +53,19 @@ public class CursosController : ControllerBase
         return Ok(curso);
     }
 
+    [HttpPut("{id:int}/coordenador")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AtribuirCoordenador(int id, [FromBody] int coordenadorId)
+    {
+        await _cursoService.AtribuirCoordenadorAsync(id, coordenadorId);
+        return Ok(new
+        {
+            mensagem = coordenadorId == 0
+                ? "Curso marcado como aguardando coordenador."
+                : "Coordenador atribuido ao curso com sucesso."
+        });
+    }
+
     private int? ObterProfessorId()
     {
         var rawId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("usuarioId");

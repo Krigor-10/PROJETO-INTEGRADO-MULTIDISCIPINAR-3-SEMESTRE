@@ -5,10 +5,20 @@ export async function loadWorkspaceSnapshot(usuario) {
   const role = usuario.tipoUsuario || "";
 
   if (MANAGER_ROLES.has(role)) {
-    const [cursos, modulos, alunos, professores, turmas, matriculas, pendentes] = await Promise.all([
+    const [
+      cursos,
+      modulos,
+      alunos,
+      coordenadores,
+      professores,
+      turmas,
+      matriculas,
+      pendentes
+    ] = await Promise.all([
       apiRequest("/Cursos"),
       apiRequest("/Modulos"),
       apiRequest("/Alunos"),
+      role === "Admin" ? apiRequest("/Coordenadores") : Promise.resolve([]),
       apiRequest("/Professores"),
       apiRequest("/Turmas"),
       apiRequest("/Matriculas"),
@@ -20,6 +30,7 @@ export async function loadWorkspaceSnapshot(usuario) {
       cursos,
       modulos,
       alunos,
+      coordenadores,
       professores,
       turmas,
       matriculas,
@@ -44,11 +55,12 @@ export async function loadWorkspaceSnapshot(usuario) {
     };
   }
 
-  const [cursos, turmas, matriculas, conteudos] = await Promise.all([
+  const [cursos, turmas, matriculas, conteudos, progressos] = await Promise.all([
     apiRequest("/Cursos"),
     apiRequest("/Turmas"),
     apiRequest(`/Matriculas/aluno/${usuario.id}`),
-    apiRequest(`/ConteudosDidaticos/aluno/${usuario.id}`)
+    apiRequest(`/ConteudosDidaticos/aluno/${usuario.id}`),
+    apiRequest(`/Progressos/aluno/${usuario.id}`)
   ]);
 
   return {
@@ -56,7 +68,8 @@ export async function loadWorkspaceSnapshot(usuario) {
     cursos,
     turmas,
     matriculas,
-    conteudos
+    conteudos,
+    progressos
   };
 }
 

@@ -100,10 +100,16 @@ export const EMPTY_SNAPSHOT = {
   modulos: [],
   conteudos: [],
   alunos: [],
+  coordenadores: [],
   professores: [],
   turmas: [],
   matriculas: [],
-  pendentes: []
+  pendentes: [],
+  progressos: {
+    conteudos: [],
+    modulos: [],
+    cursos: []
+  }
 };
 
 export function getSectionMeta(section, role) {

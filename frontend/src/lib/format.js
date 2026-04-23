@@ -50,6 +50,31 @@ export function normalizeContentType(type) {
   return type || "Desconhecido";
 }
 
+export function normalizeProgressStatus(status) {
+  const labels = {
+    1: "Nao iniciado",
+    2: "Em andamento",
+    3: "Concluido"
+  };
+
+  if (typeof status === "number") {
+    return labels[status] || "Desconhecido";
+  }
+
+  return status || "Nao iniciado";
+}
+
+export function progressStatusTone(status) {
+  switch (normalizeProgressStatus(status)) {
+    case "Concluido":
+      return "success";
+    case "Em andamento":
+      return "warning";
+    default:
+      return "info";
+  }
+}
+
 export function statusTone(status) {
   switch (normalizeStatus(status)) {
     case "Aprovada":
@@ -112,6 +137,11 @@ export function formatDate(value) {
 export function formatGrade(value) {
   const numeric = Number(value || 0);
   return numeric > 0 ? numeric.toFixed(1).replace(".", ",") : "-";
+}
+
+export function formatPercent(value) {
+  const numeric = Number(value || 0);
+  return `${Math.max(0, Math.min(numeric, 100)).toFixed(0)}%`;
 }
 
 export function onlyDigits(value) {

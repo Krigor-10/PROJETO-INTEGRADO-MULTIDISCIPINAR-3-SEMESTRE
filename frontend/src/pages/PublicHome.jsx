@@ -72,7 +72,7 @@ export default function PublicHome({ hasSession, isDemoMode, onNavigate }) {
                 {hasSession ? "Ir para o painel" : "Entrar agora"}
               </button>
 
-              <button className="ghost-button" type="button" onClick={() => onNavigate("/cadastro")}>
+              <button className="button button--secondary" type="button" onClick={() => onNavigate("/cadastro")}>
                 Solicitar matricula
               </button>
             </div>
@@ -163,7 +163,7 @@ export default function PublicHome({ hasSession, isDemoMode, onNavigate }) {
               {hasSession ? "Voltar ao painel" : "Entrar na plataforma"}
             </button>
 
-            <button className="ghost-button ghost-button--light" type="button" onClick={() => onNavigate("/cadastro")}>
+            <button className="button button--secondary button--light" type="button" onClick={() => onNavigate("/cadastro")}>
               Abrir cadastro
             </button>
           </div>
@@ -185,11 +185,11 @@ export default function PublicHome({ hasSession, isDemoMode, onNavigate }) {
                 <h3>{card.title}</h3>
                 <p>{card.text}</p>
                 {card.actionType === "route" ? (
-                  <RouteLink className="ghost-button support-card__action" onNavigate={onNavigate} to={card.actionTarget}>
+                  <RouteLink className="button button--secondary support-card__action" onNavigate={onNavigate} to={card.actionTarget}>
                     {card.actionLabel}
                   </RouteLink>
                 ) : (
-                  <a className="ghost-button support-card__action" href={card.actionTarget}>
+                  <a className="button button--secondary support-card__action" href={card.actionTarget}>
                     {card.actionLabel}
                   </a>
                 )}

@@ -30,16 +30,22 @@ export async function demoRequest(endpoint, options = {}) {
       return listCourses();
     case path === "/Cursos/meus" && method === "GET":
       return listTeacherCourses();
+    case /^\/Cursos\/\d+\/coordenador$/.test(path) && method === "PUT":
+      return assignCourseCoordinator(getCourseCoordinatorActionId(path), payload);
     case path === "/Alunos/cadastro-completo" && method === "POST":
       return registerStudent(payload);
     case path === "/Alunos" && method === "GET":
       return listStudents();
+    case path === "/Coordenadores" && method === "GET":
+      return listCoordinators();
     case path === "/Professores" && method === "GET":
       return listProfessors();
     case path === "/Turmas" && method === "GET":
       return listClasses();
     case path === "/Turmas/minhas" && method === "GET":
       return listTeacherClasses();
+    case /^\/Turmas\/\d+\/professor$/.test(path) && method === "PUT":
+      return assignClassProfessor(getClassProfessorActionId(path), payload);
     case path === "/Modulos" && method === "GET":
       return listModules();
     case path === "/Modulos/meus" && method === "GET":
@@ -56,6 +62,10 @@ export async function demoRequest(endpoint, options = {}) {
       return listPendingEnrollments();
     case /^\/Matriculas\/aluno\/\d+$/.test(path) && method === "GET":
       return listStudentEnrollments(getNumericId(path));
+    case /^\/Matriculas\/\d+\/aprovar$/.test(path) && method === "PUT":
+      return approveEnrollment(getEnrollmentActionId(path), payload);
+    case /^\/Matriculas\/\d+\/rejeitar$/.test(path) && method === "PUT":
+      return rejectEnrollment(getEnrollmentActionId(path));
     case path === "/ConteudosDidaticos" && method === "GET":
       return listTeacherContents();
     case path === "/ConteudosDidaticos" && method === "POST":
@@ -66,6 +76,10 @@ export async function demoRequest(endpoint, options = {}) {
       return deleteContent(getNumericId(path));
     case /^\/ConteudosDidaticos\/aluno\/\d+$/.test(path) && method === "GET":
       return listStudentContents(getNumericId(path));
+    case /^\/Progressos\/aluno\/\d+$/.test(path) && method === "GET":
+      return listStudentProgress(getNumericId(path));
+    case /^\/Progressos\/conteudos\/\d+\/concluir$/.test(path) && method === "PUT":
+      return completeStudentContent(getProgressContentActionId(path));
     default:
       throw new DemoApiError(`Endpoint demo nao mapeado: ${method} ${path}`, 404);
   }
@@ -117,6 +131,38 @@ function listTeacherCourses() {
   return clone(db.cursos)
     .filter((curso) => allowedCourseIds.has(curso.id))
     .sort((left, right) => left.titulo.localeCompare(right.titulo, "pt-BR"));
+}
+
+function assignCourseCoordinator(courseId, coordinatorIdPayload) {
+  requireAdmin();
+
+  const coordenadorId = Number(coordinatorIdPayload);
+  if (!Number.isInteger(coordenadorId) || coordenadorId < 0) {
+    throw new DemoApiError("Selecione um coordenador demo valido.", 400);
+  }
+
+  const db = readDemoDb();
+  ensureCoordinatorCollection(db);
+
+  const curso = db.cursos.find((item) => item.id === courseId);
+  if (!curso) {
+    throw new DemoApiError("Curso demo nao encontrado.", 404);
+  }
+
+  if (coordenadorId === 0) {
+    curso.coordenadorId = null;
+    saveDemoDb(db);
+    return { mensagem: "Curso demo marcado como aguardando coordenador." };
+  }
+
+  const coordenador = db.coordenadores.find((item) => item.id === coordenadorId);
+  if (!coordenador) {
+    throw new DemoApiError("Coordenador demo nao encontrado.", 404);
+  }
+
+  curso.coordenadorId = coordenador.id;
+  saveDemoDb(db);
+  return { mensagem: "Coordenador demo atribuido ao curso com sucesso." };
 }
 
 function registerStudent(payload) {
@@ -202,6 +248,13 @@ function listStudents() {
     .sort((left, right) => left.nome.localeCompare(right.nome, "pt-BR"));
 }
 
+function listCoordinators() {
+  requireAdmin();
+  const db = readDemoDb();
+  ensureCoordinatorCollection(db);
+  return clone(db.coordenadores).sort((left, right) => left.nome.localeCompare(right.nome, "pt-BR"));
+}
+
 function listProfessors() {
   requireManager();
   const db = readDemoDb();
@@ -220,6 +273,30 @@ function listTeacherClasses() {
   return clone(db.turmas)
     .filter((turma) => turma.professorId === user.id)
     .sort((left, right) => left.nomeTurma.localeCompare(right.nomeTurma, "pt-BR"));
+}
+
+function assignClassProfessor(classId, professorIdPayload) {
+  requireManager();
+
+  const professorId = Number(professorIdPayload);
+  if (!Number.isInteger(professorId) || professorId <= 0) {
+    throw new DemoApiError("Selecione um professor demo valido.", 400);
+  }
+
+  const db = readDemoDb();
+  const turma = db.turmas.find((item) => item.id === classId);
+  if (!turma) {
+    throw new DemoApiError("Turma demo nao encontrada.", 404);
+  }
+
+  const professor = db.professores.find((item) => item.id === professorId);
+  if (!professor) {
+    throw new DemoApiError("Professor demo nao encontrado.", 404);
+  }
+
+  turma.professorId = professor.id;
+  saveDemoDb(db);
+  return { mensagem: "Professor demo atribuido a turma com sucesso." };
 }
 
 function listModules() {
@@ -331,6 +408,55 @@ function listStudentEnrollments(studentId) {
   );
 }
 
+function approveEnrollment(enrollmentId, turmaIdPayload) {
+  requireManager();
+
+  const turmaId = Number(turmaIdPayload);
+  if (!Number.isInteger(turmaId) || turmaId <= 0) {
+    throw new DemoApiError("Selecione uma turma demo valida para aprovar a matricula.", 400);
+  }
+
+  const db = readDemoDb();
+  const matricula = db.matriculas.find((item) => item.id === enrollmentId);
+  if (!matricula) {
+    throw new DemoApiError("Matricula demo nao encontrada.", 404);
+  }
+
+  const turma = db.turmas.find((item) => item.id === turmaId);
+  if (!turma) {
+    throw new DemoApiError("Turma demo nao encontrada.", 404);
+  }
+
+  if (matricula.cursoId !== turma.cursoId) {
+    throw new DemoApiError("A turma demo selecionada nao pertence ao curso solicitado pelo aluno.", 422);
+  }
+
+  const aluno = db.alunos.find((item) => item.id === matricula.alunoId);
+
+  matricula.turmaId = turma.id;
+  matricula.status = 1;
+  if (aluno) {
+    aluno.turmaAtual = turma.nomeTurma;
+  }
+
+  saveDemoDb(db);
+  return { mensagem: "Matricula demo aprovada com sucesso." };
+}
+
+function rejectEnrollment(enrollmentId) {
+  requireManager();
+
+  const db = readDemoDb();
+  const matricula = db.matriculas.find((item) => item.id === enrollmentId);
+  if (!matricula) {
+    throw new DemoApiError("Matricula demo nao encontrada.", 404);
+  }
+
+  matricula.status = 2;
+  saveDemoDb(db);
+  return { mensagem: "Matricula demo rejeitada com sucesso." };
+}
+
 function listTeacherContents() {
   const user = requireProfessor();
   const db = readDemoDb();
@@ -364,6 +490,80 @@ function listStudentContents(studentId) {
       (conteudo) => approvedTurmaIds.has(conteudo.turmaId) && Number(conteudo.statusPublicacao) === 2
     )
   );
+}
+
+function listStudentProgress(studentId) {
+  const user = requireAuthenticatedUser();
+
+  if (!MANAGER_ROLES.has(user.tipoUsuario) && user.id !== studentId) {
+    throw new DemoApiError("Voce nao pode visualizar progresso demo de outro usuario.", 403);
+  }
+
+  const db = readDemoDb();
+  ensureProgressCollections(db);
+  return buildStudentProgressSnapshot(db, studentId);
+}
+
+function completeStudentContent(contentId) {
+  const user = requireAuthenticatedUser();
+
+  if (user.tipoUsuario !== "Aluno") {
+    throw new DemoApiError("Este recurso demo exige perfil de aluno.", 403);
+  }
+
+  const db = readDemoDb();
+  ensureProgressCollections(db);
+
+  const conteudo = db.conteudos.find(
+    (item) => item.id === contentId && Number(item.statusPublicacao) === 2
+  );
+  if (!conteudo) {
+    throw new DemoApiError("Conteudo demo publicado nao encontrado.", 404);
+  }
+
+  const matricula = db.matriculas.find(
+    (item) =>
+      item.alunoId === user.id &&
+      Number(item.status) === 1 &&
+      item.turmaId &&
+      item.turmaId === conteudo.turmaId
+  );
+  if (!matricula) {
+    throw new DemoApiError("Este conteudo demo nao esta liberado para a matricula do aluno.", 422);
+  }
+
+  const now = new Date().toISOString();
+  let progresso = db.progressos.conteudos.find(
+    (item) => item.matriculaId === matricula.id && item.conteudoDidaticoId === conteudo.id
+  );
+
+  if (!progresso) {
+    progresso = {
+      id: nextId(db.progressos.conteudos),
+      matriculaId: matricula.id,
+      conteudoDidaticoId: conteudo.id,
+      moduloId: conteudo.moduloId,
+      statusProgresso: 1,
+      percentualConclusao: 0,
+      primeiroAcessoEm: now,
+      ultimoAcessoEm: null,
+      concluidoEm: null
+    };
+    db.progressos.conteudos.push(progresso);
+  }
+
+  progresso.moduloId = conteudo.moduloId;
+  progresso.statusProgresso = 3;
+  progresso.percentualConclusao = 100;
+  progresso.primeiroAcessoEm ||= now;
+  progresso.ultimoAcessoEm = now;
+  progresso.concluidoEm = now;
+
+  recalculateDemoModuleProgress(db, matricula, conteudo.moduloId, now);
+  recalculateDemoCourseProgress(db, matricula, now);
+  saveDemoDb(db);
+
+  return buildStudentProgressSnapshot(db, user.id);
 }
 
 function createContent(payload) {
@@ -560,6 +760,212 @@ function hydrateContent(db, conteudo) {
   };
 }
 
+function buildStudentProgressSnapshot(db, studentId) {
+  ensureProgressCollections(db);
+
+  const enrollmentIds = new Set(
+    db.matriculas
+      .filter((matricula) => matricula.alunoId === studentId && Number(matricula.status) === 1)
+      .map((matricula) => matricula.id)
+  );
+
+  return clone({
+    conteudos: db.progressos.conteudos.filter((progresso) => enrollmentIds.has(progresso.matriculaId)),
+    modulos: db.progressos.modulos.filter((progresso) => enrollmentIds.has(progresso.matriculaId)),
+    cursos: db.progressos.cursos.filter((progresso) => enrollmentIds.has(progresso.matriculaId))
+  });
+}
+
+function recalculateDemoModuleProgress(db, matricula, moduloId, now) {
+  const conteudosModulo = db.conteudos.filter(
+    (conteudo) =>
+      Number(conteudo.statusPublicacao) === 2 &&
+      conteudo.turmaId === matricula.turmaId &&
+      conteudo.moduloId === moduloId
+  );
+  const contentIds = new Set(conteudosModulo.map((conteudo) => conteudo.id));
+  const completedIds = new Set(
+    db.progressos.conteudos
+      .filter(
+        (progresso) =>
+          progresso.matriculaId === matricula.id &&
+          contentIds.has(progresso.conteudoDidaticoId) &&
+          Number(progresso.statusProgresso) === 3
+      )
+      .map((progresso) => progresso.conteudoDidaticoId)
+  );
+  const pesoTotal = sumDemoWeights(conteudosModulo);
+  const pesoConcluido = sumDemoWeights(conteudosModulo.filter((conteudo) => completedIds.has(conteudo.id)));
+  const percentualConclusao = calculateDemoPercent(pesoConcluido, pesoTotal);
+
+  let progressoModulo = db.progressos.modulos.find(
+    (progresso) => progresso.matriculaId === matricula.id && progresso.moduloId === moduloId
+  );
+
+  if (!progressoModulo) {
+    progressoModulo = {
+      id: nextId(db.progressos.modulos),
+      matriculaId: matricula.id,
+      moduloId,
+      statusProgresso: 1,
+      percentualConclusao: 0,
+      pesoConcluido: 0,
+      pesoTotal: 0,
+      conteudosConcluidos: 0,
+      totalConteudos: 0,
+      avaliacoesConcluidas: 0,
+      totalAvaliacoes: 0,
+      mediaModulo: 0,
+      atualizadoEm: now
+    };
+    db.progressos.modulos.push(progressoModulo);
+  }
+
+  progressoModulo.statusProgresso = resolveDemoProgressStatus(percentualConclusao);
+  progressoModulo.percentualConclusao = percentualConclusao;
+  progressoModulo.pesoConcluido = pesoConcluido;
+  progressoModulo.pesoTotal = pesoTotal;
+  progressoModulo.conteudosConcluidos = completedIds.size;
+  progressoModulo.totalConteudos = conteudosModulo.length;
+  progressoModulo.atualizadoEm = now;
+}
+
+function recalculateDemoCourseProgress(db, matricula, now) {
+  const moduleById = new Map(db.modulos.map((modulo) => [modulo.id, modulo]));
+  const conteudosCurso = db.conteudos.filter((conteudo) => {
+    const modulo = moduleById.get(conteudo.moduloId);
+    return (
+      Number(conteudo.statusPublicacao) === 2 &&
+      conteudo.turmaId === matricula.turmaId &&
+      modulo?.cursoId === matricula.cursoId
+    );
+  });
+  const contentIds = new Set(conteudosCurso.map((conteudo) => conteudo.id));
+  const completedIds = new Set(
+    db.progressos.conteudos
+      .filter(
+        (progresso) =>
+          progresso.matriculaId === matricula.id &&
+          contentIds.has(progresso.conteudoDidaticoId) &&
+          Number(progresso.statusProgresso) === 3
+      )
+      .map((progresso) => progresso.conteudoDidaticoId)
+  );
+  const moduleGroups = new Map();
+
+  conteudosCurso.forEach((conteudo) => {
+    const current = moduleGroups.get(conteudo.moduloId) || [];
+    current.push(conteudo);
+    moduleGroups.set(conteudo.moduloId, current);
+  });
+
+  const modulosConcluidos = [...moduleGroups.values()].filter((conteudosModulo) =>
+    conteudosModulo.every((conteudo) => completedIds.has(conteudo.id))
+  ).length;
+  const pesoTotal = sumDemoWeights(conteudosCurso);
+  const pesoConcluido = sumDemoWeights(conteudosCurso.filter((conteudo) => completedIds.has(conteudo.id)));
+  const percentualConclusao = calculateDemoPercent(pesoConcluido, pesoTotal);
+
+  let progressoCurso = db.progressos.cursos.find(
+    (progresso) => progresso.matriculaId === matricula.id && progresso.cursoId === matricula.cursoId
+  );
+
+  if (!progressoCurso) {
+    progressoCurso = {
+      id: nextId(db.progressos.cursos),
+      matriculaId: matricula.id,
+      cursoId: matricula.cursoId,
+      statusProgresso: 1,
+      percentualConclusao: 0,
+      pesoConcluido: 0,
+      pesoTotal: 0,
+      modulosConcluidos: 0,
+      totalModulos: 0,
+      mediaCurso: 0,
+      atualizadoEm: now
+    };
+    db.progressos.cursos.push(progressoCurso);
+  }
+
+  progressoCurso.statusProgresso = resolveDemoProgressStatus(percentualConclusao);
+  progressoCurso.percentualConclusao = percentualConclusao;
+  progressoCurso.pesoConcluido = pesoConcluido;
+  progressoCurso.pesoTotal = pesoTotal;
+  progressoCurso.modulosConcluidos = modulosConcluidos;
+  progressoCurso.totalModulos = moduleGroups.size;
+  progressoCurso.atualizadoEm = now;
+}
+
+function ensureProgressCollections(db) {
+  db.progressos ||= {};
+  db.progressos.conteudos ||= [];
+  db.progressos.modulos ||= [];
+  db.progressos.cursos ||= [];
+}
+
+function ensureCoordinatorCollection(db) {
+  db.coordenadores ||= [
+    {
+      id: 901,
+      nome: "Clara Campos",
+      email: "coordenacao@demo.edtech",
+      cpf: "38765432100",
+      telefone: "(11) 98888-4400",
+      cep: "01310-000",
+      rua: "Avenida Paulista",
+      numero: "1500",
+      bairro: "Bela Vista",
+      cidade: "Sao Paulo",
+      estado: "SP",
+      tipoUsuario: "Coordenador",
+      ativo: true,
+      cursoResponsavel: "Trilhas EdTech"
+    },
+    {
+      id: 902,
+      nome: "Helena Rocha",
+      email: "helena@coord.demo",
+      cpf: "21987654300",
+      telefone: "(21) 98888-5500",
+      cep: "20031-170",
+      rua: "Rua Primeiro de Marco",
+      numero: "90",
+      bairro: "Centro",
+      cidade: "Rio de Janeiro",
+      estado: "RJ",
+      tipoUsuario: "Coordenador",
+      ativo: true,
+      cursoResponsavel: "Dados e Produto"
+    }
+  ];
+}
+
+function sumDemoWeights(conteudos) {
+  return roundDemoNumber(
+    conteudos.reduce((total, conteudo) => total + Math.max(Number(conteudo.pesoProgresso || 0), 0), 0)
+  );
+}
+
+function calculateDemoPercent(pesoConcluido, pesoTotal) {
+  if (pesoTotal <= 0) {
+    return 0;
+  }
+
+  return roundDemoNumber(Math.min((pesoConcluido / pesoTotal) * 100, 100));
+}
+
+function resolveDemoProgressStatus(percentualConclusao) {
+  if (percentualConclusao >= 100) {
+    return 3;
+  }
+
+  return percentualConclusao > 0 ? 2 : 1;
+}
+
+function roundDemoNumber(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
 function ensureTeacherOwnsTurma(db, user, turmaId) {
   const turma = db.turmas.find((item) => item.id === turmaId);
 
@@ -594,6 +1000,16 @@ function requireManager() {
   return user;
 }
 
+function requireAdmin() {
+  const user = requireAuthenticatedUser();
+
+  if (user.tipoUsuario !== "Admin") {
+    throw new DemoApiError("Este recurso demo exige perfil de administracao.", 403);
+  }
+
+  return user;
+}
+
 function requireProfessor() {
   const user = requireAuthenticatedUser();
 
@@ -621,6 +1037,9 @@ function readDemoDb() {
       const parsed = JSON.parse(stored);
 
       if (isValidDemoDb(parsed)) {
+        ensureProgressCollections(parsed);
+        ensureCoordinatorCollection(parsed);
+        saveDemoDb(parsed);
         return parsed;
       }
     }
@@ -643,6 +1062,7 @@ function isValidDemoDb(db) {
       Array.isArray(db.cursos) &&
       Array.isArray(db.modulos) &&
       Array.isArray(db.alunos) &&
+      (db.coordenadores === undefined || Array.isArray(db.coordenadores)) &&
       Array.isArray(db.professores) &&
       Array.isArray(db.turmas) &&
       Array.isArray(db.matriculas) &&
@@ -731,6 +1151,40 @@ function createInitialDemoDb() {
         tipoUsuario: "Aluno",
         ativo: true,
         senha: "senha-caio"
+      }
+    ],
+    coordenadores: [
+      {
+        id: 901,
+        nome: "Clara Campos",
+        email: "coordenacao@demo.edtech",
+        cpf: "38765432100",
+        telefone: "(11) 98888-4400",
+        cep: "01310-000",
+        rua: "Avenida Paulista",
+        numero: "1500",
+        bairro: "Bela Vista",
+        cidade: "Sao Paulo",
+        estado: "SP",
+        tipoUsuario: "Coordenador",
+        ativo: true,
+        cursoResponsavel: "Trilhas EdTech"
+      },
+      {
+        id: 902,
+        nome: "Helena Rocha",
+        email: "helena@coord.demo",
+        cpf: "21987654300",
+        telefone: "(21) 98888-5500",
+        cep: "20031-170",
+        rua: "Rua Primeiro de Marco",
+        numero: "90",
+        bairro: "Centro",
+        cidade: "Rio de Janeiro",
+        estado: "RJ",
+        tipoUsuario: "Coordenador",
+        ativo: true,
+        cursoResponsavel: "Dados e Produto"
       }
     ],
     professores: [
@@ -896,7 +1350,12 @@ function createInitialDemoDb() {
         atualizadoEm: "2026-03-19T11:15:00.000Z",
         publicadoEm: "2026-03-19T11:15:00.000Z"
       }
-    ]
+    ],
+    progressos: {
+      conteudos: [],
+      modulos: [],
+      cursos: []
+    }
   };
 }
 
@@ -923,6 +1382,50 @@ function normalizePath(path) {
 
 function getNumericId(path) {
   const id = Number(String(path).split("/").pop());
+
+  if (!Number.isInteger(id)) {
+    throw new DemoApiError("Identificador demo invalido.", 400);
+  }
+
+  return id;
+}
+
+function getEnrollmentActionId(path) {
+  const match = String(path).match(/^\/Matriculas\/(\d+)\/(?:aprovar|rejeitar)$/);
+  const id = Number(match?.[1]);
+
+  if (!Number.isInteger(id)) {
+    throw new DemoApiError("Identificador demo invalido.", 400);
+  }
+
+  return id;
+}
+
+function getCourseCoordinatorActionId(path) {
+  const match = String(path).match(/^\/Cursos\/(\d+)\/coordenador$/);
+  const id = Number(match?.[1]);
+
+  if (!Number.isInteger(id)) {
+    throw new DemoApiError("Identificador demo invalido.", 400);
+  }
+
+  return id;
+}
+
+function getClassProfessorActionId(path) {
+  const match = String(path).match(/^\/Turmas\/(\d+)\/professor$/);
+  const id = Number(match?.[1]);
+
+  if (!Number.isInteger(id)) {
+    throw new DemoApiError("Identificador demo invalido.", 400);
+  }
+
+  return id;
+}
+
+function getProgressContentActionId(path) {
+  const match = String(path).match(/^\/Progressos\/conteudos\/(\d+)\/concluir$/);
+  const id = Number(match?.[1]);
 
   if (!Number.isInteger(id)) {
     throw new DemoApiError("Identificador demo invalido.", 400);

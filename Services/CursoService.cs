@@ -69,6 +69,14 @@ public class CursoService : ICursoService
         var curso = await _cursoRepository.ObterPorIdAsync(cursoId)
             ?? throw new KeyNotFoundException("Curso não encontrado.");
 
+        if (coordenadorId == 0)
+        {
+            curso.RemoverCoordenador();
+            _cursoRepository.Atualizar(curso);
+            await _cursoRepository.SalvarAlteracoesAsync();
+            return;
+        }
+
         var coordenador = await _coordenadorRepository.ObterPorIdAsync(coordenadorId)
             ?? throw new KeyNotFoundException("Coordenador não encontrado.");
 

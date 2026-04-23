@@ -56,6 +56,7 @@ builder.Services.AddScoped<IConteudoDidaticoRepository, ConteudoDidaticoReposito
 builder.Services.AddScoped<IMatriculaRepository, MatriculaRepository>();
 builder.Services.AddScoped<IModuloRepository, ModuloRepository>();
 builder.Services.AddScoped<IConteudoDidaticoService, ConteudoDidaticoService>();
+builder.Services.AddScoped<IProgressoAlunoService, ProgressoAlunoService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<ICursoService, CursoService>();
 builder.Services.AddScoped<IMatriculaService, MatriculaService>();

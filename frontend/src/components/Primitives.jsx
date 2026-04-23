@@ -60,7 +60,9 @@ export function DataTable({ columns, rows, emptyMessage }) {
           {rows.map((row, index) => (
             <tr key={row.id ?? index}>
               {columns.map((column) => (
-                <td key={column.key}>{column.render ? column.render(row) : row[column.key]}</td>
+                <td data-label={typeof column.label === "string" ? column.label : ""} key={column.key}>
+                  {column.render ? column.render(row) : row[column.key]}
+                </td>
               ))}
             </tr>
           ))}
