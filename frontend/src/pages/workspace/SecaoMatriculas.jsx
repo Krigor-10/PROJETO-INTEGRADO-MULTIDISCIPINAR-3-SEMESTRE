@@ -35,8 +35,20 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
     () => linhasMatriculas.filter((matricula) => matricula.status === "Aprovada"),
     [linhasMatriculas]
   );
+  const matriculasRejeitadas = useMemo(
+    () => linhasMatriculas.filter((matricula) => matricula.status === "Rejeitada"),
+    [linhasMatriculas]
+  );
   const mostrandoPendentes = ehAluno || visualizacaoGestor === "pendentes";
-  const linhasVisiveis = ehAluno ? linhasMatriculas : mostrandoPendentes ? matriculasPendentes : matriculasAprovadas;
+  const mostrandoAprovadas = !ehAluno && visualizacaoGestor === "aprovadas";
+  const mostrandoRejeitadas = !ehAluno && visualizacaoGestor === "rejeitadas";
+  const linhasVisiveis = ehAluno
+    ? linhasMatriculas
+    : mostrandoPendentes
+      ? matriculasPendentes
+      : mostrandoAprovadas
+        ? matriculasAprovadas
+        : matriculasRejeitadas;
 
   const idsPendentes = useMemo(() => new Set(matriculasPendentes.map((matricula) => matricula.id)), [matriculasPendentes]);
 
@@ -230,11 +242,18 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
             Pendentes ({matriculasPendentes.length})
           </button>
           <button
-            className={`table-view-toggle__item${!mostrandoPendentes ? " table-view-toggle__item--active" : ""}`}
+            className={`table-view-toggle__item${mostrandoAprovadas ? " table-view-toggle__item--active" : ""}`}
             onClick={() => setVisualizacaoGestor("aprovadas")}
             type="button"
           >
             Aprovadas ({matriculasAprovadas.length})
+          </button>
+          <button
+            className={`table-view-toggle__item${mostrandoRejeitadas ? " table-view-toggle__item--active" : ""}`}
+            onClick={() => setVisualizacaoGestor("rejeitadas")}
+            type="button"
+          >
+            Rejeitadas ({matriculasRejeitadas.length})
           </button>
         </div>
         {mostrandoPendentes ? (
@@ -281,46 +300,66 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
             ? quantidadeSelecionada
               ? `${quantidadeSelecionada} selecionada${quantidadeSelecionada > 1 ? "s" : ""}`
               : `${matriculasPendentes.length} pendente${matriculasPendentes.length === 1 ? "" : "s"}`
-            : `${matriculasAprovadas.length} aprovada${matriculasAprovadas.length === 1 ? "" : "s"}`}
+            : mostrandoAprovadas
+              ? `${matriculasAprovadas.length} aprovada${matriculasAprovadas.length === 1 ? "" : "s"}`
+              : `${matriculasRejeitadas.length} rejeitada${matriculasRejeitadas.length === 1 ? "" : "s"}`}
         </p>
       </div>
     );
   }
 
+  const colunasPendentesGestor = [
+    { key: "selecionar", label: "Selecionar", render: renderSelecao },
+    { key: "id", label: "ID" },
+    { key: "aluno", label: "Aluno" },
+    { key: "curso", label: "Curso" },
+    { key: "turma", label: "Turma" },
+    {
+      key: "status",
+      label: "Status",
+      render: (matricula) => <StatusPill tone={statusTone(matricula.status)}>{matricula.status}</StatusPill>
+    },
+    { key: "dataSolicitacao", label: "Solicitada em", render: (matricula) => formatDate(matricula.dataSolicitacao) }
+  ];
+
+  const colunasAprovadasGestor = [
+    { key: "id", label: "ID" },
+    { key: "aluno", label: "Aluno" },
+    { key: "curso", label: "Curso" },
+    { key: "turma", label: "Turma" },
+    {
+      key: "status",
+      label: "Status",
+      render: (matricula) => <StatusPill tone={statusTone(matricula.status)}>{matricula.status}</StatusPill>
+    },
+    { key: "dataSolicitacao", label: "Solicitada em", render: (matricula) => formatDate(matricula.dataSolicitacao) }
+  ];
+
+  const colunasRejeitadasGestor = [
+    { key: "id", label: "ID" },
+    { key: "aluno", label: "Aluno" },
+    { key: "curso", label: "Curso" },
+    { key: "turma", label: "Turma" },
+    {
+      key: "status",
+      label: "Status",
+      render: (matricula) => <StatusPill tone={statusTone(matricula.status)}>{matricula.status}</StatusPill>
+    },
+    { key: "dataSolicitacao", label: "Solicitada em", render: (matricula) => formatDate(matricula.dataSolicitacao) }
+  ];
+
   const colunasGestor = mostrandoPendentes
-    ? [
-        { key: "selecionar", label: "Selecionar", render: renderSelecao },
-        { key: "id", label: "ID" },
-        { key: "aluno", label: "Aluno" },
-        { key: "curso", label: "Curso" },
-        { key: "turma", label: "Turma" },
-        {
-          key: "status",
-          label: "Status",
-          render: (matricula) => <StatusPill tone={statusTone(matricula.status)}>{matricula.status}</StatusPill>
-        },
-        { key: "dataSolicitacao", label: "Solicitada em", render: (matricula) => formatDate(matricula.dataSolicitacao) }
-      ]
-    : [
-        { key: "id", label: "ID" },
-        { key: "aluno", label: "Aluno" },
-        { key: "curso", label: "Curso" },
-        { key: "turma", label: "Turma" },
-        {
-          key: "status",
-          label: "Status",
-          render: (matricula) => <StatusPill tone={statusTone(matricula.status)}>{matricula.status}</StatusPill>
-        },
-        { key: "notaFinal", label: "Nota", render: (matricula) => formatGrade(matricula.notaFinal) },
-        { key: "dataSolicitacao", label: "Solicitada em", render: (matricula) => formatDate(matricula.dataSolicitacao) }
-      ];
+    ? colunasPendentesGestor
+    : mostrandoAprovadas
+      ? colunasAprovadasGestor
+      : colunasRejeitadasGestor;
 
   return (
     <PanelCard
       description={
         ehAluno
           ? "Suas solicitacoes e vinculacoes atuais."
-          : "Acompanhe a fila de alunos pendentes e consulte as matriculas ja aprovadas."
+          : "Acompanhe a fila de alunos pendentes e consulte as matriculas aprovadas ou rejeitadas."
       }
       title={ehAluno ? "Minhas matriculas" : "Fluxo de matriculas"}
     >
@@ -347,7 +386,9 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
             ? "Nenhuma matricula encontrada."
             : mostrandoPendentes
             ? "Nenhum aluno pendente de aprovacao."
-            : "Nenhuma matricula aprovada encontrada."
+            : mostrandoAprovadas
+              ? "Nenhuma matricula aprovada encontrada."
+              : "Nenhuma matricula rejeitada encontrada."
         }
         rows={linhasVisiveis}
       />

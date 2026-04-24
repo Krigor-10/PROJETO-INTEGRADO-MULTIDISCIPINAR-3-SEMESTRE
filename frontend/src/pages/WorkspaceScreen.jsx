@@ -32,6 +32,10 @@ export default function WorkspaceScreen({
   const [refreshKey, setRefreshKey] = useState(0);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [solicitacaoNovoConteudo, setSolicitacaoNovoConteudo] = useState(0);
+  const [cursoEmFocoPorSecao, setCursoEmFocoPorSecao] = useState({
+    modulos: null,
+    turmas: null
+  });
 
   const role = usuario.tipoUsuario || "";
   const isManager = MANAGER_ROLES.has(role);
@@ -376,6 +380,31 @@ export default function WorkspaceScreen({
     [approvedStudentRows]
   );
 
+  // Mantem a navegacao contextual entre Curso -> Modulos/Turmas sem precisar expandir o roteador agora.
+  function abrirSecaoRelacionadaAoCurso(section, curso) {
+    setCursoEmFocoPorSecao((atual) => ({
+      ...atual,
+      [section]: {
+        cursoId: Number(curso.id),
+        titulo: curso.titulo || `Curso #${curso.id}`
+      }
+    }));
+    onNavigate(`/app/${section}`);
+  }
+
+  function limparCursoEmFoco(section) {
+    setCursoEmFocoPorSecao((atual) => {
+      if (!atual[section]) {
+        return atual;
+      }
+
+      return {
+        ...atual,
+        [section]: null
+      };
+    });
+  }
+
   return (
     <div className="workspace-app">
       <header className="workspace-globalbar">
@@ -571,7 +600,7 @@ export default function WorkspaceScreen({
             ) : null}
 
             {activeSection === "alunos" ? (
-              <SecaoAlunos alunos={snapshot.alunos} />
+              <SecaoAlunos alunos={snapshot.alunos} matriculas={snapshot.matriculas} />
             ) : null}
 
             {activeSection === "professores" ? (
@@ -584,15 +613,22 @@ export default function WorkspaceScreen({
                 cursos={cursosDaSecaoCursos}
                 ehAdmin={role === "Admin"}
                 ehCoordenador={role === "Coordenador"}
+                ehProfessor={role === "Professor"}
+                matriculas={snapshot.matriculas}
+                modulos={snapshot.modulos}
+                onAbrirSecaoCurso={abrirSecaoRelacionadaAoCurso}
                 onRefresh={() => setRefreshKey((current) => current + 1)}
                 onSessionExpired={onSessionExpired}
+                turmas={snapshot.turmas}
               />
             ) : null}
 
             {activeSection === "modulos" ? (
               <SecaoModulos
                 cursos={snapshot.cursos}
+                cursoEmFoco={cursoEmFocoPorSecao.modulos}
                 modulos={snapshot.modulos}
+                onCursoEmFocoAplicado={() => limparCursoEmFoco("modulos")}
                 onRefresh={() => setRefreshKey((current) => current + 1)}
                 onSessionExpired={onSessionExpired}
               />
@@ -635,8 +671,11 @@ export default function WorkspaceScreen({
             {activeSection === "turmas" ? (
               <SecaoTurmas
                 cursoPorId={cursoById}
+                cursoEmFoco={cursoEmFocoPorSecao.turmas}
                 ehGestor={isManager}
                 ehProfessor={isProfessor}
+                matriculas={snapshot.matriculas}
+                onCursoEmFocoAplicado={() => limparCursoEmFoco("turmas")}
                 onRefresh={() => setRefreshKey((current) => current + 1)}
                 onSessionExpired={onSessionExpired}
                 professores={snapshot.professores}

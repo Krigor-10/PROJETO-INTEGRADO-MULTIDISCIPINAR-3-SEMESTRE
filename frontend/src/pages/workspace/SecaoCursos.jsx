@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DataTable, InlineMessage, PanelCard } from "../../components/Primitives.jsx";
 import { ApiError, apiRequest } from "../../lib/api.js";
-import { compactText, formatMoney } from "../../lib/format.js";
+import { compactText } from "../../lib/format.js";
 
 function normalizarBusca(valor) {
   return String(valor ?? "")
@@ -16,6 +16,11 @@ export function SecaoCursos({
   cursos,
   ehAdmin,
   ehCoordenador,
+  ehProfessor,
+  matriculas = [],
+  modulos = [],
+  turmas = [],
+  onAbrirSecaoCurso,
   onRefresh,
   onSessionExpired
 }) {
@@ -34,6 +39,36 @@ export function SecaoCursos({
     () => new Map(coordenadoresOrdenados.map((coordenador) => [coordenador.id, coordenador])),
     [coordenadoresOrdenados]
   );
+  // Consolida os numeros do curso para reforcar a hierarquia entre catalogo, estrutura e operacao.
+  const resumoPorCursoId = useMemo(() => {
+    const resumoInicial = new Map(cursos.map((curso) => [curso.id, { modulos: 0, turmas: 0, matriculas: 0 }]));
+
+    modulos.forEach((modulo) => {
+      const resumo = resumoInicial.get(modulo.cursoId);
+
+      if (resumo) {
+        resumo.modulos += 1;
+      }
+    });
+
+    turmas.forEach((turma) => {
+      const resumo = resumoInicial.get(turma.cursoId);
+
+      if (resumo) {
+        resumo.turmas += 1;
+      }
+    });
+
+    matriculas.forEach((matricula) => {
+      const resumo = resumoInicial.get(matricula.cursoId);
+
+      if (resumo) {
+        resumo.matriculas += 1;
+      }
+    });
+
+    return resumoInicial;
+  }, [cursos, matriculas, modulos, turmas]);
   const termoBusca = useMemo(() => normalizarBusca(buscaCurso), [buscaCurso]);
   const cursosFiltrados = useMemo(() => {
     let proximosCursos = cursos;
@@ -52,11 +87,19 @@ export function SecaoCursos({
     return proximosCursos.filter((curso) => {
       const coordenador = curso.coordenadorId ? coordenadorPorId.get(curso.coordenadorId) : null;
       const coordenacao = coordenador?.nome || (curso.coordenadorId ? `Usuario #${curso.coordenadorId}` : "Nao atribuida");
-      const campos = [curso.titulo, curso.descricao, coordenacao, formatMoney(curso.preco)];
+      const resumo = resumoPorCursoId.get(curso.id) || { modulos: 0, turmas: 0, matriculas: 0 };
+      const campos = [
+        curso.titulo,
+        curso.descricao,
+        coordenacao,
+        `${resumo.modulos} modulos`,
+        `${resumo.turmas} turmas`,
+        `${resumo.matriculas} matriculas`
+      ];
 
       return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
     });
-  }, [coordenadorPorId, cursos, ehAdmin, filtroCoordenador, termoBusca]);
+  }, [coordenadorPorId, cursos, ehAdmin, filtroCoordenador, resumoPorCursoId, termoBusca]);
   const idsCursos = useMemo(() => new Set(cursosFiltrados.map((curso) => curso.id)), [cursosFiltrados]);
   const cursosMarcados = useMemo(
     () => cursosFiltrados.filter((curso) => cursosSelecionados.has(curso.id)),
@@ -175,6 +218,10 @@ export function SecaoCursos({
     );
   }
 
+  function abrirSecaoRelacionada(section, curso) {
+    onAbrirSecaoCurso?.(section, curso);
+  }
+
   function renderBarraAtribuicao() {
     if (!ehAdmin) {
       return null;
@@ -277,7 +324,24 @@ export function SecaoCursos({
     ...(ehAdmin ? [{ key: "selecionar", label: "Selecionar", render: renderSelecao }] : []),
     { key: "titulo", label: "Titulo" },
     { key: "descricao", label: "Descricao", render: (curso) => compactText(curso.descricao, 90) },
-    { key: "preco", label: "Preco", render: (curso) => formatMoney(curso.preco) },
+    {
+      key: "estrutura",
+      label: "Estrutura",
+      render: (curso) => {
+        const resumo = resumoPorCursoId.get(curso.id) || { modulos: 0, turmas: 0, matriculas: 0 };
+
+        return (
+          <div className="table-cell-stack">
+            <strong>Fluxo do curso</strong>
+            <div className="table-badge-list">
+              <span className="chip">{resumo.modulos} modulo{resumo.modulos === 1 ? "" : "s"}</span>
+              <span className="chip">{resumo.turmas} turma{resumo.turmas === 1 ? "" : "s"}</span>
+              <span className="chip">{resumo.matriculas} matricula{resumo.matriculas === 1 ? "" : "s"}</span>
+            </div>
+          </div>
+        );
+      }
+    },
     {
       key: "coordenacao",
       label: "Coordenacao",
@@ -285,6 +349,25 @@ export function SecaoCursos({
         const coordenador = curso.coordenadorId ? coordenadorPorId.get(curso.coordenadorId) : null;
         return coordenador?.nome || (curso.coordenadorId ? `Usuario #${curso.coordenadorId}` : "Nao atribuida");
       }
+    },
+    {
+      key: "acessos",
+      label: "Acessos",
+      render: (curso) => (
+        <div className="table-cell-stack">
+          <strong>Explorar curso</strong>
+          <div className="table-badge-list">
+            {!ehProfessor ? (
+              <button className="table-action" onClick={() => abrirSecaoRelacionada("modulos", curso)} type="button">
+                Ver modulos
+              </button>
+            ) : null}
+            <button className="table-action" onClick={() => abrirSecaoRelacionada("turmas", curso)} type="button">
+              Ver turmas
+            </button>
+          </div>
+        </div>
+      )
     }
   ];
 
@@ -292,9 +375,9 @@ export function SecaoCursos({
     <PanelCard
       description={
         ehCoordenador
-          ? "Cursos ativos vinculados a sua coordenacao."
+          ? "Cursos ativos vinculados a sua coordenacao, com leitura direta de modulos, turmas e matriculas."
           : ehAdmin
-          ? "Selecione cursos e atribua um coordenador responsavel em lote."
+          ? "Selecione cursos, atribua coordenacao em lote e use cada linha como ponto de partida para modulos e turmas."
           : "Catalogo de cursos reutilizado na home publica e no ambiente autenticado."
       }
       title="Cursos ativos"

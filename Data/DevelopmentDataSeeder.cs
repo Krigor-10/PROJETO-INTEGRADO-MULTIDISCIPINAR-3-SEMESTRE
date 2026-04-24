@@ -11,6 +11,42 @@ public static class DevelopmentDataSeeder
     private const string ProfessorEmail = "professor@edtech.local";
     private const string StudentEmail = "aluno@edtech.local";
     private const string DefaultPassword = "Edtech@123";
+    private const int AdditionalCoordinatorCount = 5;
+    private const int AdditionalProfessorCount = 5;
+    private const int AdditionalStudentCount = 20;
+    private static readonly (string Title, string Description, decimal Price, string ModuleTitle)[] AdditionalCourseCatalog =
+    {
+        (
+            "Engenharia de Prompt e IA Generativa",
+            "Trilha pratica para criar prompts, estruturar contexto e operar fluxos com modelos generativos.",
+            990.00m,
+            "Fundamentos de Prompt Design"
+        ),
+        (
+            "Product Analytics para EdTech",
+            "Leitura de metricas, funis e comportamento do aluno para apoiar decisoes de produto.",
+            1180.00m,
+            "Indicadores e Funis de Aprendizagem"
+        ),
+        (
+            "Cyberseguranca para Aplicacoes Web",
+            "Boas praticas de autenticacao, autorizacao, protecao de dados e endurecimento de APIs.",
+            1360.00m,
+            "Fundamentos de Seguranca em APIs"
+        ),
+        (
+            "Mobile com React Native",
+            "Construcao de apps mobile multiplataforma com foco em componentes, navegacao e consumo de APIs.",
+            1275.00m,
+            "Primeiros Fluxos Mobile"
+        ),
+        (
+            "QA e Automacao de Testes",
+            "Cobertura de testes, automacao funcional e estrategias para reduzir regressao em produtos digitais.",
+            1090.00m,
+            "Base de Qualidade e Automacao"
+        )
+    };
 
     public static async Task SeedAsync(PlataformaContext context)
     {
@@ -18,6 +54,9 @@ public static class DevelopmentDataSeeder
         var coordinator = await EnsureCoordinatorAsync(context);
         var professor = await EnsureProfessorAsync(context);
         var student = await EnsureStudentAsync(context);
+        var additionalCoordinators = await EnsureAdditionalCoordinatorsAsync(context);
+        await EnsureAdditionalProfessorsAsync(context);
+        var additionalStudents = await EnsureAdditionalStudentsAsync(context);
 
         await context.SaveChangesAsync();
 
@@ -37,7 +76,7 @@ public static class DevelopmentDataSeeder
             createdBy: admin.Id,
             coordinatorId: coordinator.Id);
 
-        await EnsureCourseAsync(
+        var uxCourse = await EnsureCourseAsync(
             context,
             title: "UX para Produtos Digitais",
             description: "Curso voltado para pesquisa, prototipacao e desenho de experiencias educacionais.",
@@ -45,7 +84,7 @@ public static class DevelopmentDataSeeder
             createdBy: admin.Id,
             coordinatorId: coordinator.Id);
 
-        await EnsureCourseAsync(
+        var architectureCourse = await EnsureCourseAsync(
             context,
             title: "Arquitetura de Software Moderna",
             description: "Fundamentos de arquitetura, integracao entre servicos e organizacao de sistemas escalaveis.",
@@ -53,7 +92,7 @@ public static class DevelopmentDataSeeder
             createdBy: admin.Id,
             coordinatorId: coordinator.Id);
 
-        await EnsureCourseAsync(
+        var pythonCourse = await EnsureCourseAsync(
             context,
             title: "Python para Automacao e Dados",
             description: "Aplicacoes praticas com scripts, automacao de processos e leitura de dados para produtos digitais.",
@@ -61,7 +100,7 @@ public static class DevelopmentDataSeeder
             createdBy: admin.Id,
             coordinatorId: coordinator.Id);
 
-        await EnsureCourseAsync(
+        var devOpsCourse = await EnsureCourseAsync(
             context,
             title: "DevOps e Cloud Foundations",
             description: "Bases de infraestrutura, pipelines e publicacao de aplicacoes em ambientes de nuvem.",
@@ -69,7 +108,11 @@ public static class DevelopmentDataSeeder
             createdBy: admin.Id,
             coordinatorId: coordinator.Id);
 
+        await EnsureAdditionalCoursesAndModulesAsync(context, admin.Id, additionalCoordinators);
+
         await context.SaveChangesAsync();
+
+        var promptEngineeringCourse = await context.Cursos.FirstAsync(item => item.Titulo == AdditionalCourseCatalog[0].Title);
 
         var fundamentosWebModule = await EnsureModuloAsync(context, "Fundamentos da Web Moderna", fullStackCourse.Id);
         await EnsureModuloAsync(context, "APIs e Integracao", fullStackCourse.Id);
@@ -83,7 +126,11 @@ public static class DevelopmentDataSeeder
         await context.SaveChangesAsync();
 
         await EnsureApprovedEnrollmentAsync(context, student, fullStackCourse, fullStackClass);
-        await EnsurePendingEnrollmentAsync(context, student, dataCourse);
+        await EnsurePendingEnrollmentAsync(context, additionalStudents[0], uxCourse);
+        await EnsurePendingEnrollmentAsync(context, additionalStudents[1], architectureCourse);
+        await EnsurePendingEnrollmentAsync(context, additionalStudents[2], pythonCourse);
+        await EnsurePendingEnrollmentAsync(context, additionalStudents[3], devOpsCourse);
+        await EnsurePendingEnrollmentAsync(context, additionalStudents[4], promptEngineeringCourse);
 
         await context.SaveChangesAsync();
 
@@ -127,7 +174,42 @@ public static class DevelopmentDataSeeder
 
     private static async Task<Coordenador> EnsureCoordinatorAsync(PlataformaContext context)
     {
-        var coordinator = await context.Coordenadores.FirstOrDefaultAsync(user => user.Email == CoordinatorEmail);
+        return await EnsureCoordinatorAsync(
+            context,
+            name: "Coordenacao Academica",
+            email: CoordinatorEmail,
+            cpf: "22222222222",
+            phone: "11999990002",
+            responsibleCourse: "Trilhas EdTech");
+    }
+
+    private static async Task<List<Coordenador>> EnsureAdditionalCoordinatorsAsync(PlataformaContext context)
+    {
+        var coordinators = new List<Coordenador>();
+
+        for (var index = 1; index <= AdditionalCoordinatorCount; index++)
+        {
+            coordinators.Add(await EnsureCoordinatorAsync(
+                context,
+                name: $"Coordenador Teste {index:00}",
+                email: $"coordenador.teste{index:00}@edtech.local",
+                cpf: $"{22300000000L + index:00000000000}",
+                phone: $"1177777{index:0000}",
+                responsibleCourse: $"Trilha Teste {index:00}"));
+        }
+
+        return coordinators;
+    }
+
+    private static async Task<Coordenador> EnsureCoordinatorAsync(
+        PlataformaContext context,
+        string name,
+        string email,
+        string cpf,
+        string phone,
+        string responsibleCourse)
+    {
+        var coordinator = await context.Coordenadores.FirstOrDefaultAsync(user => user.Email == email);
 
         if (coordinator is null)
         {
@@ -135,10 +217,10 @@ public static class DevelopmentDataSeeder
             context.Coordenadores.Add(coordinator);
         }
 
-        coordinator.Nome = "Coordenacao Academica";
-        coordinator.Email = CoordinatorEmail;
-        coordinator.Cpf = "22222222222";
-        coordinator.Telefone = "11999990002";
+        coordinator.Nome = name;
+        coordinator.Email = email;
+        coordinator.Cpf = cpf;
+        coordinator.Telefone = phone;
         coordinator.Cep = "01001-000";
         coordinator.Rua = "Rua da Plataforma";
         coordinator.Numero = "120";
@@ -146,14 +228,54 @@ public static class DevelopmentDataSeeder
         coordinator.Cidade = "Sao Paulo";
         coordinator.Estado = "SP";
         coordinator.ConfigurarAcesso("Coordenador", BCrypt.Net.BCrypt.HashPassword(DefaultPassword));
-        coordinator.CursoResponsavel = "Trilhas EdTech";
+        coordinator.CursoResponsavel = responsibleCourse;
 
         return coordinator;
     }
 
     private static async Task<Professor> EnsureProfessorAsync(PlataformaContext context)
     {
-        var professor = await context.Professores.FirstOrDefaultAsync(user => user.Email == ProfessorEmail);
+        return await EnsureProfessorAsync(
+            context,
+            name: "Professor Demo",
+            email: ProfessorEmail,
+            cpf: "33333333333",
+            phone: "11999990003",
+            specialty: "Full Stack e Dados");
+    }
+
+    private static async Task EnsureAdditionalProfessorsAsync(PlataformaContext context)
+    {
+        var specialties = new[]
+        {
+            "Front-end e UX",
+            "Back-end e APIs",
+            "Dados e BI",
+            "Cloud e DevOps",
+            "QA e Automacao"
+        };
+
+        for (var index = 1; index <= AdditionalProfessorCount; index++)
+        {
+            await EnsureProfessorAsync(
+                context,
+                name: $"Professor Teste {index:00}",
+                email: $"professor.teste{index:00}@edtech.local",
+                cpf: $"{33400000000L + index:00000000000}",
+                phone: $"1166666{index:0000}",
+                specialty: specialties[index - 1]);
+        }
+    }
+
+    private static async Task<Professor> EnsureProfessorAsync(
+        PlataformaContext context,
+        string name,
+        string email,
+        string cpf,
+        string phone,
+        string specialty)
+    {
+        var professor = await context.Professores.FirstOrDefaultAsync(user => user.Email == email);
 
         if (professor is null)
         {
@@ -161,10 +283,10 @@ public static class DevelopmentDataSeeder
             context.Professores.Add(professor);
         }
 
-        professor.Nome = "Professor Demo";
-        professor.Email = ProfessorEmail;
-        professor.Cpf = "33333333333";
-        professor.Telefone = "11999990003";
+        professor.Nome = name;
+        professor.Email = email;
+        professor.Cpf = cpf;
+        professor.Telefone = phone;
         professor.Cep = "01001-000";
         professor.Rua = "Rua da Plataforma";
         professor.Numero = "140";
@@ -172,14 +294,52 @@ public static class DevelopmentDataSeeder
         professor.Cidade = "Sao Paulo";
         professor.Estado = "SP";
         professor.ConfigurarAcesso("Professor", BCrypt.Net.BCrypt.HashPassword(DefaultPassword));
-        professor.Especialidade = "Full Stack e Dados";
+        professor.Especialidade = specialty;
 
         return professor;
     }
 
     private static async Task<Aluno> EnsureStudentAsync(PlataformaContext context)
     {
-        var student = await context.Alunos.FirstOrDefaultAsync(user => user.Email == StudentEmail);
+        return await EnsureStudentAsync(
+            context,
+            name: "Aluno Demo",
+            email: StudentEmail,
+            cpf: "44444444444",
+            phone: "11999990004",
+            enrollment: "MAT-DEMO-2026",
+            currentClass: "Nao atribuida");
+    }
+
+    private static async Task<List<Aluno>> EnsureAdditionalStudentsAsync(PlataformaContext context)
+    {
+        var students = new List<Aluno>();
+
+        for (var index = 1; index <= AdditionalStudentCount; index++)
+        {
+            students.Add(await EnsureStudentAsync(
+                context,
+                name: $"Aluno Teste {index:00}",
+                email: $"aluno.teste{index:00}@edtech.local",
+                cpf: $"{44500000000L + index:00000000000}",
+                phone: $"1188888{index:0000}",
+                enrollment: $"MAT-TESTE-2026-{index:00}",
+                currentClass: "Nao atribuida"));
+        }
+
+        return students;
+    }
+
+    private static async Task<Aluno> EnsureStudentAsync(
+        PlataformaContext context,
+        string name,
+        string email,
+        string cpf,
+        string phone,
+        string enrollment,
+        string currentClass)
+    {
+        var student = await context.Alunos.FirstOrDefaultAsync(user => user.Email == email);
 
         if (student is null)
         {
@@ -187,10 +347,10 @@ public static class DevelopmentDataSeeder
             context.Alunos.Add(student);
         }
 
-        student.Nome = "Aluno Demo";
-        student.Email = StudentEmail;
-        student.Cpf = "44444444444";
-        student.Telefone = "11999990004";
+        student.Nome = name;
+        student.Email = email;
+        student.Cpf = cpf;
+        student.Telefone = phone;
         student.Cep = "01001-000";
         student.Rua = "Rua da Plataforma";
         student.Numero = "160";
@@ -198,8 +358,8 @@ public static class DevelopmentDataSeeder
         student.Cidade = "Sao Paulo";
         student.Estado = "SP";
         student.ConfigurarAcesso("Aluno", BCrypt.Net.BCrypt.HashPassword(DefaultPassword));
-        student.Matricula = "MAT-DEMO-2026";
-        student.TurmaAtual = "Nao atribuida";
+        student.Matricula = enrollment;
+        student.TurmaAtual = currentClass;
 
         return student;
     }
@@ -230,6 +390,38 @@ public static class DevelopmentDataSeeder
 
         context.Cursos.Add(course);
         return course;
+    }
+
+    private static async Task EnsureAdditionalCoursesAndModulesAsync(
+        PlataformaContext context,
+        int createdBy,
+        IReadOnlyList<Coordenador> additionalCoordinators)
+    {
+        var seededCourses = new List<(Curso Course, string ModuleTitle)>();
+
+        for (var index = 0; index < AdditionalCourseCatalog.Length; index++)
+        {
+            var courseSeed = AdditionalCourseCatalog[index];
+            var coordinator = additionalCoordinators[index % additionalCoordinators.Count];
+
+            var course = await EnsureCourseAsync(
+                context,
+                title: courseSeed.Title,
+                description: courseSeed.Description,
+                price: courseSeed.Price,
+                createdBy: createdBy,
+                coordinatorId: coordinator.Id);
+
+            coordinator.CursoResponsavel = course.Titulo;
+            seededCourses.Add((course, courseSeed.ModuleTitle));
+        }
+
+        await context.SaveChangesAsync();
+
+        foreach (var seededCourse in seededCourses)
+        {
+            await EnsureModuloAsync(context, seededCourse.ModuleTitle, seededCourse.Course.Id);
+        }
     }
 
     private static async Task<Turma> EnsureTurmaAsync(PlataformaContext context, string name, int courseId, int professorId)

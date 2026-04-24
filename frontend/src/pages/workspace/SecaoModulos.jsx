@@ -9,32 +9,49 @@ const ESTADO_INICIAL_FORMULARIO_MODULO = {
   titulo: ""
 };
 
-export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
+// Mantem a busca consistente com as demais tabelas do workspace.
+function normalizarBusca(valor) {
+  return String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+export function SecaoModulos({ cursos, cursoEmFoco, modulos, onCursoEmFocoAplicado, onRefresh, onSessionExpired }) {
   const [dadosFormularioModulo, setDadosFormularioModulo] = useState(ESTADO_INICIAL_FORMULARIO_MODULO);
   const [moduloEmEdicaoId, setModuloEmEdicaoId] = useState(null);
   const [mensagemFormularioModulo, setMensagemFormularioModulo] = useState({ tone: "", message: "" });
   const [modulosSelecionados, setModulosSelecionados] = useState(() => new Set());
   const [salvandoModulo, setSalvandoModulo] = useState(false);
+  const [buscaModulo, setBuscaModulo] = useState("");
+  const [filtroCurso, setFiltroCurso] = useState("todos");
 
   const cursosOrdenados = useMemo(
     () => [...cursos].sort((cursoA, cursoB) => cursoA.titulo.localeCompare(cursoB.titulo, "pt-BR")),
     [cursos]
   );
+  const termoBusca = useMemo(() => normalizarBusca(buscaModulo), [buscaModulo]);
+  const cursoEmFocoId = Number(cursoEmFoco?.cursoId || 0);
 
   useEffect(() => {
     if (moduloEmEdicaoId || dadosFormularioModulo.cursoId || !cursosOrdenados.length) {
       return;
     }
 
+    // Preenche o curso padrao para agilizar a criacao de um novo modulo.
     setDadosFormularioModulo((dadosAtuais) => ({
       ...dadosAtuais,
-      cursoId: String(cursosOrdenados[0].id)
+      cursoId: filtroCurso !== "todos" ? filtroCurso : String(cursosOrdenados[0].id)
     }));
-  }, [moduloEmEdicaoId, dadosFormularioModulo.cursoId, cursosOrdenados]);
+  }, [moduloEmEdicaoId, dadosFormularioModulo.cursoId, cursosOrdenados, filtroCurso]);
 
   const cursoPorId = useMemo(() => mapById(cursos), [cursos]);
-
-  const linhasModulos = useMemo(
+  const cursoFiltrado = useMemo(
+    () => (filtroCurso === "todos" ? null : cursoPorId.get(Number(filtroCurso)) || null),
+    [cursoPorId, filtroCurso]
+  );
+  const modulosOrdenados = useMemo(
     () =>
       [...modulos].sort((moduloA, moduloB) => {
         const tituloCursoA = cursoPorId.get(moduloA.cursoId)?.titulo || "";
@@ -49,6 +66,30 @@ export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
       }),
     [cursoPorId, modulos]
   );
+
+  // A tabela trabalha sempre em cima do recorte filtrado para que busca, contagem e selecao falem a mesma lingua.
+  const linhasModulos = useMemo(
+    () => {
+      let proximosModulos = modulosOrdenados;
+
+      if (filtroCurso !== "todos") {
+        const cursoId = Number(filtroCurso);
+        proximosModulos = proximosModulos.filter((modulo) => Number(modulo.cursoId) === cursoId);
+      }
+
+      if (!termoBusca) {
+        return proximosModulos;
+      }
+
+      return proximosModulos.filter((modulo) => {
+        const nomeCurso = cursoPorId.get(modulo.cursoId)?.titulo || `Curso #${modulo.cursoId}`;
+        const campos = [modulo.titulo, nomeCurso, formatDate(modulo.dataCriacao)];
+
+        return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
+      });
+    },
+    [cursoPorId, filtroCurso, modulosOrdenados, termoBusca]
+  );
   const idsModulos = useMemo(() => new Set(linhasModulos.map((modulo) => modulo.id)), [linhasModulos]);
   const modulosMarcados = useMemo(
     () => linhasModulos.filter((modulo) => modulosSelecionados.has(modulo.id)),
@@ -57,14 +98,31 @@ export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
   const todosModulosSelecionados =
     linhasModulos.length > 0 && linhasModulos.every((modulo) => modulosSelecionados.has(modulo.id));
   const quantidadeSelecionada = modulosMarcados.length;
+  const temFiltroAtivo = Boolean(termoBusca || filtroCurso !== "todos");
 
   useEffect(() => {
+    // Remove da selecao itens que sumiram da lista visivel apos filtro ou refresh.
     setModulosSelecionados((atuais) => {
       const proximos = new Set([...atuais].filter((id) => idsModulos.has(id)));
       return proximos.size === atuais.size ? atuais : proximos;
     });
   }, [idsModulos]);
 
+  useEffect(() => {
+    if (!cursoEmFocoId) {
+      return;
+    }
+
+    setBuscaModulo("");
+    setFiltroCurso(String(cursoEmFocoId));
+    setDadosFormularioModulo((dadosAtuais) => ({
+      ...dadosAtuais,
+      cursoId: moduloEmEdicaoId ? dadosAtuais.cursoId : String(cursoEmFocoId)
+    }));
+    onCursoEmFocoAplicado?.();
+  }, [cursoEmFocoId, moduloEmEdicaoId, onCursoEmFocoAplicado]);
+
+  // Atualiza o estado do formulario sem perder os outros campos em edicao.
   function atualizarCampoFormularioModulo(event) {
     const { name, value } = event.target;
 
@@ -78,11 +136,12 @@ export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
     setModuloEmEdicaoId(null);
     setModulosSelecionados(new Set());
     setDadosFormularioModulo({
-      cursoId: cursosOrdenados[0] ? String(cursosOrdenados[0].id) : "",
+      cursoId: filtroCurso !== "todos" ? filtroCurso : cursosOrdenados[0] ? String(cursosOrdenados[0].id) : "",
       titulo: ""
     });
   }
 
+  // Carrega um unico modulo selecionado no formulario para reaproveitar o mesmo fluxo de criacao/edicao.
   function abrirEdicaoModulo(modulo) {
     setModuloEmEdicaoId(modulo.id);
     setDadosFormularioModulo({
@@ -92,6 +151,12 @@ export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
     setMensagemFormularioModulo({ tone: "", message: "" });
   }
 
+  function limparFiltros() {
+    setBuscaModulo("");
+    setFiltroCurso("todos");
+  }
+
+  // A selecao em lote fica restrita aos modulos visiveis para evitar operacoes escondidas por filtros.
   function alternarModulo(modulo) {
     if (salvandoModulo) {
       return;
@@ -138,6 +203,7 @@ export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
     abrirEdicaoModulo(modulosMarcados[0]);
   }
 
+  // Centraliza validacao e chamada da API tanto para criacao quanto para edicao.
   async function salvarModulo(event) {
     event.preventDefault();
 
@@ -193,6 +259,7 @@ export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
     }
   }
 
+  // Exclui em lote os modulos marcados e reidrata a tabela depois da operacao.
   async function excluirSelecionados() {
     if (!quantidadeSelecionada) {
       setMensagemFormularioModulo({ tone: "error", message: "Selecione ao menos um modulo para excluir." });
@@ -289,7 +356,54 @@ export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
         <p className="table-toolbar__summary">
           {quantidadeSelecionada
             ? `${quantidadeSelecionada} selecionado${quantidadeSelecionada > 1 ? "s" : ""}`
-            : `${linhasModulos.length} modulo${linhasModulos.length === 1 ? "" : "s"}`}
+            : `${linhasModulos.length} de ${modulos.length} modulo${modulos.length === 1 ? "" : "s"}`}
+        </p>
+      </div>
+    );
+  }
+
+  // Replica o toolbar de filtros usado nas outras secoes administrativas.
+  function renderBarraFiltrosModulos() {
+    return (
+      <div className="table-toolbar table-toolbar--filters">
+        <div className="table-filter-group">
+          <label className="table-search-control">
+            <span aria-hidden="true" className="table-search-control__icon">
+              <svg focusable="false" height="18" viewBox="0 0 24 24" width="18">
+                <path
+                  d="M10.8 5.2a5.6 5.6 0 1 0 0 11.2 5.6 5.6 0 0 0 0-11.2Zm-7.6 5.6a7.6 7.6 0 1 1 13.5 4.8l3.8 3.8a1 1 0 0 1-1.4 1.4l-3.8-3.8A7.6 7.6 0 0 1 3.2 10.8Z"
+                  fill="currentColor"
+                />
+              </svg>
+            </span>
+            <input
+              aria-label="Buscar modulos"
+              className="table-inline-input table-inline-input--search"
+              onChange={(event) => setBuscaModulo(event.target.value)}
+              placeholder="Pesquisar modulos"
+              type="search"
+              value={buscaModulo}
+            />
+          </label>
+          <select
+            aria-label="Filtrar modulos por curso"
+            className="table-inline-select"
+            onChange={(event) => setFiltroCurso(event.target.value)}
+            value={filtroCurso}
+          >
+            <option value="todos">Todos os cursos</option>
+            {cursosOrdenados.map((curso) => (
+              <option key={curso.id} value={curso.id}>
+                {curso.titulo}
+              </option>
+            ))}
+          </select>
+          <button className="table-action" disabled={!temFiltroAtivo} onClick={limparFiltros} type="button">
+            Limpar filtros
+          </button>
+        </div>
+        <p className="table-toolbar__summary">
+          {linhasModulos.length} de {modulos.length} modulo{modulos.length === 1 ? "" : "s"}
         </p>
       </div>
     );
@@ -298,7 +412,11 @@ export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
   return (
     <div className="panel-grid panel-grid--stacked">
       <PanelCard
-        description="Crie e mantenha a estrutura modular dos cursos antes de ligar conteudos e avaliacoes."
+        description={
+          cursoFiltrado
+            ? `Crie e mantenha os modulos de ${cursoFiltrado.titulo} com o curso ja preselecionado no formulario.`
+            : "Crie e mantenha a estrutura modular dos cursos antes de ligar conteudos e avaliacoes."
+        }
         title={moduloEmEdicaoId ? "Editar modulo" : "Novo modulo"}
       >
         <form className="management-form" onSubmit={salvarModulo}>
@@ -358,9 +476,14 @@ export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
       </PanelCard>
 
       <PanelCard
-        description="Lista consolidada dos modulos cadastrados, com vinculo direto ao curso correspondente."
+        description={
+          cursoFiltrado
+            ? `Mostrando apenas os modulos de ${cursoFiltrado.titulo}. Use Limpar filtros para voltar ao catalogo completo.`
+            : "Lista consolidada dos modulos cadastrados, com vinculo direto ao curso correspondente."
+        }
         title="Modulos cadastrados"
       >
+        {renderBarraFiltrosModulos()}
         {renderBarraAcoesModulos()}
         <DataTable
           columns={[
@@ -373,7 +496,7 @@ export function SecaoModulos({ cursos, modulos, onRefresh, onSessionExpired }) {
             },
             { key: "dataCriacao", label: "Criado em", render: (row) => formatDate(row.dataCriacao) }
           ]}
-          emptyMessage="Nenhum modulo cadastrado ainda."
+          emptyMessage={temFiltroAtivo ? "Nenhum modulo encontrado com os filtros aplicados." : "Nenhum modulo cadastrado ainda."}
           rows={linhasModulos}
         />
       </PanelCard>

@@ -42,6 +42,8 @@ export async function demoRequest(endpoint, options = {}) {
       return listProfessors();
     case path === "/Turmas" && method === "GET":
       return listClasses();
+    case path === "/Turmas" && method === "POST":
+      return createClass(payload);
     case path === "/Turmas/minhas" && method === "GET":
       return listTeacherClasses();
     case /^\/Turmas\/\d+\/professor$/.test(path) && method === "PUT":
@@ -273,6 +275,56 @@ function listTeacherClasses() {
   return clone(db.turmas)
     .filter((turma) => turma.professorId === user.id)
     .sort((left, right) => left.nomeTurma.localeCompare(right.nomeTurma, "pt-BR"));
+}
+
+function createClass(payload) {
+  requireManager();
+
+  const nomeTurma = String(payload.nomeTurma || "").trim();
+  const cursoId = Number(payload.cursoId);
+  const professorId = Number(payload.professorId);
+
+  if (!nomeTurma) {
+    throw new DemoApiError("Informe um nome para criar a turma.", 400);
+  }
+
+  if (!cursoId) {
+    throw new DemoApiError("Selecione um curso demo para criar a turma.", 400);
+  }
+
+  if (!professorId) {
+    throw new DemoApiError("Selecione um professor demo para criar a turma.", 400);
+  }
+
+  const db = readDemoDb();
+  const curso = db.cursos.find((item) => item.id === cursoId);
+  if (!curso) {
+    throw new DemoApiError("Curso demo nao encontrado.", 404);
+  }
+
+  const professor = db.professores.find((item) => item.id === professorId);
+  if (!professor) {
+    throw new DemoApiError("Professor demo nao encontrado.", 404);
+  }
+
+  const turmaDuplicada = db.turmas.some(
+    (item) => item.cursoId === cursoId && String(item.nomeTurma || "").trim().toLowerCase() === nomeTurma.toLowerCase()
+  );
+  if (turmaDuplicada) {
+    throw new DemoApiError(`Ja existe uma turma demo chamada "${nomeTurma}" para esse curso.`, 409);
+  }
+
+  const turma = {
+    id: nextId(db.turmas),
+    nomeTurma,
+    cursoId,
+    professorId,
+    dataCriacao: new Date().toISOString()
+  };
+
+  db.turmas.push(turma);
+  saveDemoDb(db);
+  return clone(turma);
 }
 
 function assignClassProfessor(classId, professorIdPayload) {

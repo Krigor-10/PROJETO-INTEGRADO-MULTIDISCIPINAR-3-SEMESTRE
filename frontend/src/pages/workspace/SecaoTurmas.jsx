@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DataTable, InlineMessage, PanelCard } from "../../components/Primitives.jsx";
 import { ApiError, apiRequest } from "../../lib/api.js";
-import { formatDate } from "../../lib/format.js";
+import { normalizeStatus } from "../../lib/format.js";
 
 function normalizarBusca(valor) {
   return String(valor ?? "")
@@ -12,10 +12,13 @@ function normalizarBusca(valor) {
 }
 
 export function SecaoTurmas({
+  cursoEmFoco,
   ehGestor,
   ehProfessor,
+  matriculas = [],
   turmas,
   cursoPorId,
+  onCursoEmFocoAplicado,
   professores = [],
   professorPorId,
   onRefresh,
@@ -25,11 +28,29 @@ export function SecaoTurmas({
   const [buscaTurma, setBuscaTurma] = useState("");
   const [filtroCurso, setFiltroCurso] = useState("todos");
   const [filtroProfessor, setFiltroProfessor] = useState("todos");
+  const [formularioCriacaoAberto, setFormularioCriacaoAberto] = useState(false);
+  const [dadosFormularioTurma, setDadosFormularioTurma] = useState({
+    nomeTurma: "",
+    cursoId: "",
+    professorId: ""
+  });
+  const [mensagemFormularioTurma, setMensagemFormularioTurma] = useState({ tone: "info", message: "" });
   const [professorSelecionado, setProfessorSelecionado] = useState("");
   const [mensagem, setMensagem] = useState({ tone: "info", message: "" });
   const [salvando, setSalvando] = useState(false);
-  const podeAtribuirProfessor = Boolean(ehGestor && !ehProfessor);
+  const [salvandoCriacao, setSalvandoCriacao] = useState(false);
+  const podeGerenciarTurmas = Boolean(ehGestor && !ehProfessor);
+  const podeAtribuirProfessor = podeGerenciarTurmas;
   const termoBusca = useMemo(() => normalizarBusca(buscaTurma), [buscaTurma]);
+  const cursoEmFocoId = Number(cursoEmFoco?.cursoId || 0);
+  const cursosOrdenados = useMemo(
+    () => [...cursoPorId.values()].sort((left, right) => String(left.titulo || "").localeCompare(String(right.titulo || ""), "pt-BR")),
+    [cursoPorId]
+  );
+  const cursoFiltrado = useMemo(
+    () => (filtroCurso === "todos" ? null : cursoPorId.get(Number(filtroCurso)) || null),
+    [cursoPorId, filtroCurso]
+  );
   const professoresOrdenados = useMemo(
     () => [...professores].sort((left, right) => String(left.nome || "").localeCompare(String(right.nome || ""), "pt-BR")),
     [professores]
@@ -59,6 +80,26 @@ export function SecaoTurmas({
 
     return [...professores.values()].sort((left, right) => left.nome.localeCompare(right.nome, "pt-BR"));
   }, [professoresOrdenados]);
+  const quantidadeAlunosPorTurma = useMemo(() => {
+    const alunosPorTurma = new Map();
+
+    matriculas.forEach((matricula) => {
+      const turmaId = Number(matricula.turmaId);
+      const alunoId = Number(matricula.alunoId);
+
+      if (!turmaId || !alunoId || normalizeStatus(matricula.status) !== "Aprovada") {
+        return;
+      }
+
+      if (!alunosPorTurma.has(turmaId)) {
+        alunosPorTurma.set(turmaId, new Set());
+      }
+
+      alunosPorTurma.get(turmaId).add(alunoId);
+    });
+
+    return new Map([...alunosPorTurma.entries()].map(([turmaId, alunos]) => [turmaId, alunos.size]));
+  }, [matriculas]);
   const turmasFiltradas = useMemo(() => {
     let proximasTurmas = turmas;
 
@@ -83,11 +124,12 @@ export function SecaoTurmas({
       const professor = turma.professorId ? professorPorId.get(turma.professorId) : null;
       const nomeCurso = curso?.titulo || `Curso #${turma.cursoId}`;
       const nomeProfessor = professor?.nome || (turma.professorId ? `Professor #${turma.professorId}` : "Nao definido");
-      const campos = [turma.nomeTurma, nomeCurso, nomeProfessor, formatDate(turma.dataCriacao)];
+      const totalAlunos = quantidadeAlunosPorTurma.get(turma.id) || 0;
+      const campos = [turma.nomeTurma, nomeCurso, nomeProfessor, String(totalAlunos)];
 
       return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
     });
-  }, [cursoPorId, filtroCurso, filtroProfessor, professorPorId, termoBusca, turmas]);
+  }, [cursoPorId, filtroCurso, filtroProfessor, professorPorId, quantidadeAlunosPorTurma, termoBusca, turmas]);
   const idsTurmasVisiveis = useMemo(() => new Set(turmasFiltradas.map((turma) => turma.id)), [turmasFiltradas]);
   const turmasMarcadas = useMemo(
     () => turmasFiltradas.filter((turma) => turmasSelecionadas.has(turma.id)),
@@ -105,10 +147,79 @@ export function SecaoTurmas({
     });
   }, [idsTurmasVisiveis]);
 
+  useEffect(() => {
+    if (!cursoEmFocoId) {
+      return;
+    }
+
+    setBuscaTurma("");
+    setFiltroCurso(String(cursoEmFocoId));
+    setDadosFormularioTurma((atuais) => ({
+      ...atuais,
+      cursoId: atuais.cursoId || String(cursoEmFocoId)
+    }));
+    onCursoEmFocoAplicado?.();
+  }, [cursoEmFocoId, onCursoEmFocoAplicado]);
+
+  useEffect(() => {
+    if (!formularioCriacaoAberto) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape" && !salvandoCriacao) {
+        fecharFormularioCriacao();
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [formularioCriacaoAberto, salvandoCriacao]);
+
   function limparFiltros() {
     setBuscaTurma("");
     setFiltroCurso("todos");
     setFiltroProfessor("todos");
+  }
+
+  function abrirFormularioCriacao() {
+    setMensagem({ tone: "info", message: "" });
+    setMensagemFormularioTurma({ tone: "info", message: "" });
+    setDadosFormularioTurma({
+      nomeTurma: "",
+      cursoId: filtroCurso !== "todos" ? filtroCurso : "",
+      professorId: ""
+    });
+    setFormularioCriacaoAberto(true);
+  }
+
+  function fecharFormularioCriacao() {
+    if (salvandoCriacao) {
+      return;
+    }
+
+    setFormularioCriacaoAberto(false);
+    setMensagemFormularioTurma({ tone: "info", message: "" });
+    setDadosFormularioTurma({
+      nomeTurma: "",
+      cursoId: "",
+      professorId: ""
+    });
+  }
+
+  function atualizarCampoFormularioTurma(event) {
+    const { name, value } = event.target;
+    setDadosFormularioTurma((atuais) => ({
+      ...atuais,
+      [name]: value
+    }));
   }
 
   function alternarTurma(turma) {
@@ -192,6 +303,72 @@ export function SecaoTurmas({
     }
   }
 
+  async function salvarTurma(event) {
+    event.preventDefault();
+
+    const nomeTurma = String(dadosFormularioTurma.nomeTurma || "").trim();
+    const cursoId = Number(dadosFormularioTurma.cursoId);
+    const professorId = Number(dadosFormularioTurma.professorId);
+
+    if (!nomeTurma) {
+      setMensagemFormularioTurma({ tone: "error", message: "Informe um nome para a turma." });
+      return;
+    }
+
+    if (!cursoId) {
+      setMensagemFormularioTurma({ tone: "error", message: "Selecione o curso da nova turma." });
+      return;
+    }
+
+    if (!professorId) {
+      setMensagemFormularioTurma({ tone: "error", message: "Selecione o professor responsavel pela turma." });
+      return;
+    }
+
+    try {
+      setMensagemFormularioTurma({ tone: "info", message: "" });
+      setSalvandoCriacao(true);
+
+      await apiRequest("/Turmas", {
+        method: "POST",
+        body: JSON.stringify({
+          nomeTurma,
+          cursoId,
+          professorId
+        })
+      });
+
+      const curso = cursoPorId.get(cursoId);
+      const professor = professorPorId.get(professorId);
+
+      setFormularioCriacaoAberto(false);
+      setDadosFormularioTurma({
+        nomeTurma: "",
+        cursoId: "",
+        professorId: ""
+      });
+      setMensagem({
+        tone: "success",
+        message: `Turma "${nomeTurma}" criada com sucesso para ${curso?.titulo || `Curso #${cursoId}`} com ${
+          professor?.nome || `Professor #${professorId}`
+        }.`
+      });
+      onRefresh?.();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        onSessionExpired?.();
+        return;
+      }
+
+      setMensagemFormularioTurma({
+        tone: "error",
+        message: err.message || "Nao foi possivel criar a turma agora."
+      });
+    } finally {
+      setSalvandoCriacao(false);
+    }
+  }
+
   function renderSelecao(turma) {
     return (
       <label className="table-select-cell">
@@ -252,9 +429,127 @@ export function SecaoTurmas({
     );
   }
 
+  function renderFormularioCriacaoTurma() {
+    if (!podeGerenciarTurmas || !formularioCriacaoAberto) {
+      return null;
+    }
+
+    return (
+      <div
+        className="content-form-modal"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            fecharFormularioCriacao();
+          }
+        }}
+      >
+        <div aria-label="Criar nova turma" aria-modal="true" className="content-form-modal__card" role="dialog">
+          <button
+            className="content-form-modal__close"
+            disabled={salvandoCriacao}
+            onClick={fecharFormularioCriacao}
+            type="button"
+          >
+            Fechar
+          </button>
+
+          <PanelCard
+            description="Defina o nome da turma, selecione o curso e atribua o professor responsavel antes de salvar."
+            title="Criar turma"
+          >
+            {!cursosOrdenados.length ? (
+              <InlineMessage tone="info">Cadastre ao menos um curso antes de criar novas turmas.</InlineMessage>
+            ) : !professoresOrdenados.length ? (
+              <InlineMessage tone="info">Cadastre ao menos um professor antes de criar novas turmas.</InlineMessage>
+            ) : (
+              <form className="management-form" onSubmit={salvarTurma}>
+                <div className="management-form__grid">
+                  <label className="management-field management-field--wide">
+                    <span>Nome da turma</span>
+                    <input
+                      autoComplete="off"
+                      disabled={salvandoCriacao}
+                      maxLength={120}
+                      name="nomeTurma"
+                      onChange={atualizarCampoFormularioTurma}
+                      placeholder="Ex.: Programacao Aplicada - Turma B"
+                      type="text"
+                      value={dadosFormularioTurma.nomeTurma}
+                    />
+                  </label>
+
+                  <label className="management-field">
+                    <span>Curso</span>
+                    <select
+                      disabled={salvandoCriacao || !cursosOrdenados.length}
+                      name="cursoId"
+                      onChange={atualizarCampoFormularioTurma}
+                      value={dadosFormularioTurma.cursoId}
+                    >
+                      <option value="">Selecionar curso</option>
+                      {cursosOrdenados.map((curso) => (
+                        <option key={curso.id} value={curso.id}>
+                          {curso.titulo}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="management-field">
+                    <span>Professor responsavel</span>
+                    <select
+                      disabled={salvandoCriacao || !professoresOrdenados.length}
+                      name="professorId"
+                      onChange={atualizarCampoFormularioTurma}
+                      value={dadosFormularioTurma.professorId}
+                    >
+                      <option value="">Selecionar professor</option>
+                      {professoresOrdenados.map((professor) => (
+                        <option key={professor.id} value={professor.id}>
+                          {professor.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                {mensagemFormularioTurma.message ? (
+                  <InlineMessage tone={mensagemFormularioTurma.tone}>{mensagemFormularioTurma.message}</InlineMessage>
+                ) : null}
+
+                <div className="management-form__actions">
+                  <button
+                    className="solid-button"
+                    disabled={salvandoCriacao || !cursosOrdenados.length || !professoresOrdenados.length}
+                    type="submit"
+                  >
+                    {salvandoCriacao ? "Salvando..." : "Criar turma"}
+                  </button>
+
+                  <button
+                    className="button button--secondary"
+                    disabled={salvandoCriacao}
+                    onClick={fecharFormularioCriacao}
+                    type="button"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
+          </PanelCard>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <PanelCard
-      description="Visao das turmas disponiveis para alocacao e acompanhamento."
+      description={
+        cursoFiltrado
+          ? `Visao das turmas de ${cursoFiltrado.titulo}, com criacao e filtro contextualizados nesse curso.`
+          : "Visao das turmas disponiveis para alocacao e acompanhamento."
+      }
       title={ehProfessor ? "Turmas ligadas ao seu perfil" : "Turmas cadastradas"}
     >
       <div className="table-toolbar table-toolbar--filters">
@@ -308,9 +603,21 @@ export function SecaoTurmas({
             Limpar filtros
           </button>
         </div>
-        <p className="table-toolbar__summary">
-          {turmasFiltradas.length} de {turmas.length} turma{turmas.length === 1 ? "" : "s"}
-        </p>
+        <div className="table-actions">
+          {podeGerenciarTurmas ? (
+            <button
+              className="table-action"
+              disabled={!cursosOrdenados.length || !professoresOrdenados.length}
+              onClick={abrirFormularioCriacao}
+              type="button"
+            >
+              Criar turma
+            </button>
+          ) : null}
+          <p className="table-toolbar__summary">
+            {turmasFiltradas.length} de {turmas.length} turma{turmas.length === 1 ? "" : "s"}
+          </p>
+        </div>
       </div>
       {renderBarraAtribuicao()}
       {mensagem.message ? <InlineMessage tone={mensagem.tone}>{mensagem.message}</InlineMessage> : null}
@@ -329,11 +636,16 @@ export function SecaoTurmas({
             render: (turma) =>
               turma.professorId ? professorPorId.get(turma.professorId)?.nome || `Professor #${turma.professorId}` : "Nao definido"
           },
-          { key: "dataCriacao", label: "Criada em", render: (turma) => formatDate(turma.dataCriacao) }
+          {
+            key: "alunos",
+            label: "Alunos",
+            render: (turma) => quantidadeAlunosPorTurma.get(turma.id) || 0
+          }
         ]}
-        emptyMessage="Nenhuma turma encontrada."
+        emptyMessage={temFiltroAtivo ? "Nenhuma turma encontrada com os filtros aplicados." : "Nenhuma turma encontrada."}
         rows={turmasFiltradas}
       />
+      {renderFormularioCriacaoTurma()}
     </PanelCard>
   );
 }

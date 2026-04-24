@@ -10,10 +10,30 @@ function normalizarBusca(valor) {
     .trim();
 }
 
-export function SecaoAlunos({ alunos }) {
+export function SecaoAlunos({ alunos, matriculas = [] }) {
   const [buscaAluno, setBuscaAluno] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const termoBusca = useMemo(() => normalizarBusca(buscaAluno), [buscaAluno]);
+  const quantidadeCursosPorAluno = useMemo(() => {
+    const cursosPorAluno = new Map();
+
+    matriculas.forEach((matricula) => {
+      const alunoId = Number(matricula.alunoId);
+      const cursoId = Number(matricula.cursoId);
+
+      if (!alunoId || !cursoId) {
+        return;
+      }
+
+      if (!cursosPorAluno.has(alunoId)) {
+        cursosPorAluno.set(alunoId, new Set());
+      }
+
+      cursosPorAluno.get(alunoId).add(cursoId);
+    });
+
+    return new Map([...cursosPorAluno.entries()].map(([alunoId, cursos]) => [alunoId, cursos.size]));
+  }, [matriculas]);
   const alunosFiltrados = useMemo(() => {
     let proximosAlunos = alunos;
 
@@ -30,11 +50,12 @@ export function SecaoAlunos({ alunos }) {
     return proximosAlunos.filter((aluno) => {
       const cpfFormatado = maskCpf(aluno.cpf);
       const status = aluno.ativo ? "Ativo" : "Inativo";
-      const campos = [aluno.nome, aluno.email, aluno.cpf, cpfFormatado, aluno.cidade, status];
+      const quantidadeCursos = quantidadeCursosPorAluno.get(aluno.id) || 0;
+      const campos = [aluno.nome, aluno.email, aluno.cpf, cpfFormatado, aluno.matricula, String(quantidadeCursos), status];
 
       return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
     });
-  }, [alunos, filtroStatus, termoBusca]);
+  }, [alunos, filtroStatus, quantidadeCursosPorAluno, termoBusca]);
   const temFiltroAtivo = Boolean(termoBusca || filtroStatus !== "todos");
 
   function limparFiltros() {
@@ -86,8 +107,12 @@ export function SecaoAlunos({ alunos }) {
         columns={[
           { key: "nome", label: "Nome" },
           { key: "email", label: "E-mail" },
-          { key: "cpf", label: "CPF", render: (aluno) => maskCpf(aluno.cpf) },
-          { key: "cidade", label: "Cidade" },
+          { key: "matricula", label: "Matricula" },
+          {
+            key: "cursosCadastrados",
+            label: "Cursos cadastrados",
+            render: (aluno) => quantidadeCursosPorAluno.get(aluno.id) || 0
+          },
           {
             key: "ativo",
             label: "Status",
