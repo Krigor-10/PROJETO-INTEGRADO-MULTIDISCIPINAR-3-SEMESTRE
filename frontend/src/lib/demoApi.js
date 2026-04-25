@@ -40,6 +40,8 @@ export async function demoRequest(endpoint, options = {}) {
       return listCoordinators();
     case path === "/Professores" && method === "GET":
       return listProfessors();
+    case path === "/Professores" && method === "POST":
+      return createProfessor(payload);
     case path === "/Turmas" && method === "GET":
       return listClasses();
     case path === "/Turmas" && method === "POST":
@@ -104,17 +106,18 @@ function handleLogin(payload) {
   }
 
   const db = readDemoDb();
-  const student = db.alunos.find(
+  ensureCoordinatorCollection(db);
+  const dynamicUser = [...db.alunos, ...db.professores, ...db.coordenadores].find(
     (item) => item.email.toLowerCase() === email && String(item.senha || "") === senha
   );
 
-  if (!student) {
+  if (!dynamicUser) {
     throw new DemoApiError("Credenciais demo invalidas.", 401);
   }
 
   return {
-    token: `demo-token-${student.id}`,
-    usuario: sanitizeDemoUser(student)
+    token: `demo-token-${dynamicUser.id}`,
+    usuario: sanitizeDemoUser(dynamicUser)
   };
 }
 
@@ -260,7 +263,73 @@ function listCoordinators() {
 function listProfessors() {
   requireManager();
   const db = readDemoDb();
-  return clone(db.professores).sort((left, right) => left.nome.localeCompare(right.nome, "pt-BR"));
+  return clone(db.professores)
+    .map((professor) => sanitizeDemoUser(professor))
+    .sort((left, right) => left.nome.localeCompare(right.nome, "pt-BR"));
+}
+
+function createProfessor(payload) {
+  requireManager();
+
+  const requiredFields = [
+    "nome",
+    "email",
+    "cpf",
+    "telefone",
+    "cep",
+    "rua",
+    "numero",
+    "bairro",
+    "cidade",
+    "estado",
+    "senha",
+    "especialidade"
+  ];
+
+  const missingField = requiredFields.find((field) => !String(payload[field] || "").trim());
+  if (missingField) {
+    throw new DemoApiError("Preencha todos os campos para cadastrar o professor demo.", 400);
+  }
+
+  const db = readDemoDb();
+  ensureCoordinatorCollection(db);
+
+  const normalizedEmail = String(payload.email || "").trim().toLowerCase();
+  const normalizedCpf = onlyDigits(payload.cpf);
+  const usuariosDemo = [...db.alunos, ...db.professores, ...db.coordenadores];
+
+  const emailAlreadyUsed =
+    DEMO_ACCOUNTS.some((account) => account.email.toLowerCase() === normalizedEmail) ||
+    usuariosDemo.some((usuario) => String(usuario.email || "").toLowerCase() === normalizedEmail);
+  if (emailAlreadyUsed) {
+    throw new DemoApiError("Ja existe um usuario demo com esse e-mail.", 409);
+  }
+
+  if (usuariosDemo.some((usuario) => onlyDigits(usuario.cpf) === normalizedCpf)) {
+    throw new DemoApiError("Ja existe um usuario demo com esse CPF.", 409);
+  }
+
+  const professor = {
+    id: nextId(db.professores),
+    nome: String(payload.nome || "").trim(),
+    email: normalizedEmail,
+    cpf: normalizedCpf,
+    telefone: String(payload.telefone || "").trim(),
+    cep: String(payload.cep || "").trim(),
+    rua: String(payload.rua || "").trim(),
+    numero: String(payload.numero || "").trim(),
+    bairro: String(payload.bairro || "").trim(),
+    cidade: String(payload.cidade || "").trim(),
+    estado: String(payload.estado || "").trim().toUpperCase(),
+    tipoUsuario: "Professor",
+    ativo: true,
+    especialidade: String(payload.especialidade || "").trim(),
+    senha: String(payload.senha || "")
+  };
+
+  db.professores.push(professor);
+  saveDemoDb(db);
+  return sanitizeDemoUser(clone(professor));
 }
 
 function listClasses() {

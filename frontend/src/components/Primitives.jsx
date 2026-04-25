@@ -41,7 +41,7 @@ export function PanelCard({ children, description, title }) {
   );
 }
 
-export function DataTable({ columns, rows, emptyMessage }) {
+export function DataTable({ columns, emptyMessage, getRowAriaLabel, getRowClassName, onRowClick, rows }) {
   if (!rows.length) {
     return <EmptyState message={emptyMessage} />;
   }
@@ -58,7 +58,24 @@ export function DataTable({ columns, rows, emptyMessage }) {
         </thead>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={row.id ?? index}>
+            <tr
+              aria-label={onRowClick ? getRowAriaLabel?.(row) : undefined}
+              className={getRowClassName?.(row)}
+              key={row.id ?? index}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onRowClick(row);
+                      }
+                    }
+                  : undefined
+              }
+              role={onRowClick ? "button" : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+            >
               {columns.map((column) => (
                 <td data-label={typeof column.label === "string" ? column.label : ""} key={column.key}>
                   {column.render ? column.render(row) : row[column.key]}

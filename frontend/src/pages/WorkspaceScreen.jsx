@@ -604,7 +604,13 @@ export default function WorkspaceScreen({
             ) : null}
 
             {activeSection === "professores" ? (
-              <SecaoProfessores professores={snapshot.professores} />
+              <SecaoProfessores
+                cursos={snapshot.cursos}
+                onRefresh={() => setRefreshKey((current) => current + 1)}
+                onSessionExpired={onSessionExpired}
+                professores={snapshot.professores}
+                turmas={snapshot.turmas}
+              />
             ) : null}
 
             {activeSection === "cursos" ? (
@@ -625,12 +631,16 @@ export default function WorkspaceScreen({
 
             {activeSection === "modulos" ? (
               <SecaoModulos
+                alunos={snapshot.alunos}
                 cursos={snapshot.cursos}
                 cursoEmFoco={cursoEmFocoPorSecao.modulos}
+                matriculas={snapshot.matriculas}
                 modulos={snapshot.modulos}
                 onCursoEmFocoAplicado={() => limparCursoEmFoco("modulos")}
                 onRefresh={() => setRefreshKey((current) => current + 1)}
                 onSessionExpired={onSessionExpired}
+                professores={snapshot.professores}
+                turmas={snapshot.turmas}
               />
             ) : null}
 

@@ -135,7 +135,7 @@ export function getSectionMeta(section, role) {
       description: "A mesma base de cursos alimenta a home, o cadastro e o painel."
     },
     modulos: {
-      title: "Estrutura modular",
+      title: "Módulos por curso",
       description: "Organizacao dos modulos por curso para sustentar conteudos, avaliacoes e progresso."
     },
     conteudos: {

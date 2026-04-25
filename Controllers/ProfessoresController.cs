@@ -1,7 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PlataformaEnsino.API.Data;
+using PlataformaEnsino.API.DTOs;
 using PlataformaEnsino.API.Models;
-using PlataformaEnsino.API.Data; // O namespace correto onde está o seu contexto
 
 namespace PlataformaEnsino.API.Controllers
 {
@@ -10,30 +11,84 @@ namespace PlataformaEnsino.API.Controllers
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Coordenador")]
     public class ProfessoresController : ControllerBase
     {
-        // 1. Alteramos o nome aqui para PlataformaContext
         private readonly PlataformaContext _context;
 
-        // 2. Alteramos o nome aqui no construtor também
         public ProfessoresController(PlataformaContext context)
         {
             _context = context;
         }
 
-        // GET: api/Professores (Busca todos os professores para a tabela)
+        // GET: api/Professores
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Professor>>> GetProfessores()
+        public async Task<ActionResult<IEnumerable<ProfessorResponseDto>>> GetProfessores()
         {
-            return await _context.Professores.ToListAsync();
+            var professores = await _context.Professores
+                .AsNoTracking()
+                .OrderBy(professor => professor.Nome)
+                .ToListAsync();
+
+            return Ok(professores.Select(MapResponse));
         }
 
-        // POST: api/Professores (Cadastra um novo professor)
+        // POST: api/Professores
         [HttpPost]
-        public async Task<ActionResult<Professor>> PostProfessor(Professor professor)
+        public async Task<ActionResult<ProfessorResponseDto>> PostProfessor([FromBody] CriarProfessorDto dto)
         {
+            var emailNormalizado = dto.Email.Trim().ToLower();
+            var cpfNormalizado = new string(dto.Cpf.Where(char.IsDigit).ToArray());
+
+            if (await _context.Usuarios.AnyAsync(usuario => usuario.Email.ToLower() == emailNormalizado))
+            {
+                return BadRequest(new { erro = "Ja existe um usuario com este e-mail." });
+            }
+
+            if (await _context.Usuarios.AnyAsync(usuario => usuario.Cpf == cpfNormalizado))
+            {
+                return BadRequest(new { erro = "Ja existe um usuario com este CPF." });
+            }
+
+            var professor = new Professor
+            {
+                Nome = dto.Nome.Trim(),
+                Email = emailNormalizado,
+                Cpf = cpfNormalizado,
+                Telefone = dto.Telefone.Trim(),
+                Cep = dto.Cep.Trim(),
+                Rua = dto.Rua.Trim(),
+                Numero = dto.Numero.Trim(),
+                Bairro = dto.Bairro.Trim(),
+                Cidade = dto.Cidade.Trim(),
+                Estado = dto.Estado.Trim().ToUpper(),
+                Especialidade = dto.Especialidade.Trim()
+            };
+            professor.ConfigurarAcesso("Professor", BCrypt.Net.BCrypt.HashPassword(dto.Senha), dto.Ativo);
+
             _context.Professores.Add(professor);
             await _context.SaveChangesAsync();
 
-            return Ok(professor);
+            return Ok(MapResponse(professor));
+        }
+
+        private static ProfessorResponseDto MapResponse(Professor professor)
+        {
+            return new ProfessorResponseDto
+            {
+                Id = professor.Id,
+                Nome = professor.Nome,
+                Email = professor.Email,
+                Cpf = professor.Cpf,
+                Telefone = professor.Telefone,
+                Cep = professor.Cep,
+                Rua = professor.Rua,
+                Numero = professor.Numero,
+                Bairro = professor.Bairro,
+                Cidade = professor.Cidade,
+                Estado = professor.Estado,
+                TipoUsuario = professor.TipoUsuario,
+                DataCadastro = professor.DataCadastro,
+                Ativo = professor.Ativo,
+                Especialidade = professor.Especialidade
+            };
         }
     }
 }

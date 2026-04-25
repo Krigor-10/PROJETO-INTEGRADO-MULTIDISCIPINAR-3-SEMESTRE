@@ -527,7 +527,7 @@ export function SecaoTurmas({
                   </button>
 
                   <button
-                    className="button button--secondary"
+                    className="button button--secondary exit-button"
                     disabled={salvandoCriacao}
                     onClick={fecharFormularioCriacao}
                     type="button"

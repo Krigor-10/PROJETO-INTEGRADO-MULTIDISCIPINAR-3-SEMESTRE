@@ -22,6 +22,15 @@ const OPCOES_STATUS_PUBLICACAO = [
   { value: "2", label: "Publicado" },
   { value: "3", label: "Arquivado" }
 ];
+
+function normalizarBusca(valor) {
+  return String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 export function SecaoConteudosProfessor({
   conteudos,
   solicitacaoNovoConteudo = 0,
@@ -41,6 +50,10 @@ export function SecaoConteudosProfessor({
   const [salvandoConteudo, setSalvandoConteudo] = useState(false);
   const [idsConteudosSelecionados, setIdsConteudosSelecionados] = useState([]);
   const [formularioConteudoAberto, setFormularioConteudoAberto] = useState(false);
+  const [buscaConteudo, setBuscaConteudo] = useState("");
+  const [filtroCursoConteudo, setFiltroCursoConteudo] = useState("todos");
+  const [filtroTurmaConteudo, setFiltroTurmaConteudo] = useState("todos");
+  const [filtroStatusConteudo, setFiltroStatusConteudo] = useState("todos");
 
   const cursoPorId = useMemo(() => mapById(cursos), [cursos]);
 
@@ -166,6 +179,7 @@ export function SecaoConteudosProfessor({
   const tituloCursoSelecionado = turmaSelecionada
     ? cursoPorId.get(turmaSelecionada.cursoId)?.titulo || `Curso #${turmaSelecionada.cursoId}`
     : "";
+  const termoBuscaConteudo = useMemo(() => normalizarBusca(buscaConteudo), [buscaConteudo]);
 
   const linhasConteudosOrdenadas = useMemo(
     () =>
@@ -196,20 +210,89 @@ export function SecaoConteudosProfessor({
       }),
     [conteudos]
   );
+  const cursosDosConteudos = useMemo(() => {
+    const cursosMapeados = new Map();
+
+    turmasDoProfessor.forEach((turma) => {
+      const curso = cursoPorId.get(turma.cursoId);
+      cursosMapeados.set(turma.cursoId, curso || { id: turma.cursoId, titulo: `Curso #${turma.cursoId}` });
+    });
+
+    return [...cursosMapeados.values()].sort((left, right) => left.titulo.localeCompare(right.titulo, "pt-BR"));
+  }, [cursoPorId, turmasDoProfessor]);
+  const turmasFiltradasPorCurso = useMemo(() => {
+    if (filtroCursoConteudo === "todos") {
+      return turmasDoProfessor;
+    }
+
+    const cursoId = Number(filtroCursoConteudo);
+    return turmasDoProfessor.filter((turma) => Number(turma.cursoId) === cursoId);
+  }, [filtroCursoConteudo, turmasDoProfessor]);
+  const linhasConteudos = useMemo(() => {
+    let proximasLinhas = linhasConteudosOrdenadas;
+
+    if (filtroCursoConteudo !== "todos") {
+      const cursoId = Number(filtroCursoConteudo);
+      proximasLinhas = proximasLinhas.filter((row) => Number(row.cursoId) === cursoId);
+    }
+
+    if (filtroTurmaConteudo !== "todos") {
+      const turmaId = Number(filtroTurmaConteudo);
+      proximasLinhas = proximasLinhas.filter((row) => Number(row.turmaId) === turmaId);
+    }
+
+    if (filtroStatusConteudo !== "todos") {
+      proximasLinhas = proximasLinhas.filter((row) => String(row.statusPublicacao ?? "") === filtroStatusConteudo);
+    }
+
+    if (!termoBuscaConteudo) {
+      return proximasLinhas;
+    }
+
+    return proximasLinhas.filter((row) => {
+      const campos = [
+        row.titulo,
+        row.descricao,
+        row.corpoTexto,
+        row.linkUrl,
+        row.arquivoUrl,
+        row.turmaNome,
+        row.cursoTitulo,
+        row.moduloTitulo,
+        normalizeContentType(row.tipoConteudo),
+        normalizePublicationStatus(row.statusPublicacao),
+        formatDate(row.publicadoEm)
+      ];
+
+      return campos.some((campo) => normalizarBusca(campo).includes(termoBuscaConteudo));
+    });
+  }, [
+    filtroCursoConteudo,
+    filtroStatusConteudo,
+    filtroTurmaConteudo,
+    linhasConteudosOrdenadas,
+    termoBuscaConteudo
+  ]);
+  const temFiltroConteudoAtivo = Boolean(
+    termoBuscaConteudo ||
+      filtroCursoConteudo !== "todos" ||
+      filtroTurmaConteudo !== "todos" ||
+      filtroStatusConteudo !== "todos"
+  );
 
   const linhasConteudosSelecionadas = useMemo(
-    () => linhasConteudosOrdenadas.filter((row) => idsConteudosSelecionados.includes(row.id)),
-    [idsConteudosSelecionados, linhasConteudosOrdenadas]
+    () => linhasConteudos.filter((row) => idsConteudosSelecionados.includes(row.id)),
+    [idsConteudosSelecionados, linhasConteudos]
   );
 
   const todosConteudosSelecionados =
-    linhasConteudosOrdenadas.length > 0 && idsConteudosSelecionados.length === linhasConteudosOrdenadas.length;
+    linhasConteudos.length > 0 && linhasConteudos.every((row) => idsConteudosSelecionados.includes(row.id));
 
   useEffect(() => {
     setIdsConteudosSelecionados((current) =>
-      current.filter((id) => linhasConteudosOrdenadas.some((row) => row.id === id))
+      current.filter((id) => linhasConteudos.some((row) => row.id === id))
     );
-  }, [linhasConteudosOrdenadas]);
+  }, [linhasConteudos]);
 
   const resumoConteudos = useMemo(() => {
     const totalPublicados = conteudos.filter(
@@ -448,8 +531,12 @@ export function SecaoConteudosProfessor({
   }
 
   function alternarSelecaoTodosConteudos() {
+    if (salvandoConteudo || !linhasConteudos.length) {
+      return;
+    }
+
     setIdsConteudosSelecionados((current) =>
-      current.length === linhasConteudosOrdenadas.length ? [] : linhasConteudosOrdenadas.map((row) => row.id)
+      linhasConteudos.every((row) => current.includes(row.id)) ? [] : linhasConteudos.map((row) => row.id)
     );
   }
 
@@ -513,6 +600,90 @@ export function SecaoConteudosProfessor({
     } finally {
       setSalvandoConteudo(false);
     }
+  }
+
+  function alterarFiltroCursoConteudo(event) {
+    setFiltroCursoConteudo(event.target.value);
+    setFiltroTurmaConteudo("todos");
+  }
+
+  function limparFiltrosConteudos() {
+    setBuscaConteudo("");
+    setFiltroCursoConteudo("todos");
+    setFiltroTurmaConteudo("todos");
+    setFiltroStatusConteudo("todos");
+  }
+
+  function renderBarraFiltrosConteudos() {
+    return (
+      <div className="table-toolbar table-toolbar--filters">
+        <div className="table-filter-group">
+          <label className="table-search-control">
+            <span aria-hidden="true" className="table-search-control__icon">
+              <svg focusable="false" height="18" viewBox="0 0 24 24" width="18">
+                <path
+                  d="M10.8 5.2a5.6 5.6 0 1 0 0 11.2 5.6 5.6 0 0 0 0-11.2Zm-7.6 5.6a7.6 7.6 0 1 1 13.5 4.8l3.8 3.8a1 1 0 0 1-1.4 1.4l-3.8-3.8A7.6 7.6 0 0 1 3.2 10.8Z"
+                  fill="currentColor"
+                />
+              </svg>
+            </span>
+            <input
+              aria-label="Buscar conteudos"
+              className="table-inline-input table-inline-input--search"
+              onChange={(event) => setBuscaConteudo(event.target.value)}
+              placeholder="Pesquisar conteudos"
+              type="search"
+              value={buscaConteudo}
+            />
+          </label>
+          <select
+            aria-label="Filtrar conteudos por curso"
+            className="table-inline-select"
+            onChange={alterarFiltroCursoConteudo}
+            value={filtroCursoConteudo}
+          >
+            <option value="todos">Todos os cursos</option>
+            {cursosDosConteudos.map((curso) => (
+              <option key={curso.id} value={curso.id}>
+                {curso.titulo}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Filtrar conteudos por turma"
+            className="table-inline-select"
+            onChange={(event) => setFiltroTurmaConteudo(event.target.value)}
+            value={filtroTurmaConteudo}
+          >
+            <option value="todos">Todas as turmas</option>
+            {turmasFiltradasPorCurso.map((turma) => (
+              <option key={turma.id} value={turma.id}>
+                {turma.nomeTurma}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Filtrar conteudos por status"
+            className="table-inline-select"
+            onChange={(event) => setFiltroStatusConteudo(event.target.value)}
+            value={filtroStatusConteudo}
+          >
+            <option value="todos">Todos os status</option>
+            {OPCOES_STATUS_PUBLICACAO.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <button className="table-action" disabled={!temFiltroConteudoAtivo} onClick={limparFiltrosConteudos} type="button">
+            Limpar filtros
+          </button>
+        </div>
+        <p className="table-toolbar__summary">
+          {linhasConteudos.length} de {conteudos.length} conteudo{conteudos.length === 1 ? "" : "s"}
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -803,7 +974,12 @@ export function SecaoConteudosProfessor({
                 {salvandoConteudo ? "Salvando..." : conteudoEmEdicaoId ? "Salvar alteracoes" : "Criar conteudo"}
               </button>
 
-              <button className="button button--secondary" disabled={salvandoConteudo} onClick={fecharFormularioConteudo} type="button">
+              <button
+                className="button button--secondary exit-button"
+                disabled={salvandoConteudo}
+                onClick={fecharFormularioConteudo}
+                type="button"
+              >
                 Cancelar
               </button>
             </div>
@@ -820,6 +996,8 @@ export function SecaoConteudosProfessor({
           description="Selecione itens para editar ou excluir e acompanhe a organizacao por turma e modulo."
           title="Conteudos publicados e rascunhos"
         >
+          {renderBarraFiltrosConteudos()}
+
           <div className="table-toolbar">
             <div className="table-actions">
               <button
@@ -842,7 +1020,7 @@ export function SecaoConteudosProfessor({
             <p className="table-toolbar__summary">
               {linhasConteudosSelecionadas.length
                 ? `${linhasConteudosSelecionadas.length} conteudo(s) selecionado(s).`
-                : "Selecione um ou mais conteudos pela caixa ao lado esquerdo."}
+                : "Selecione um ou mais conteudos visiveis pela caixa ao lado esquerdo."}
             </p>
           </div>
 
@@ -858,6 +1036,7 @@ export function SecaoConteudosProfessor({
                       aria-label={todosConteudosSelecionados ? "Desmarcar todos os conteudos" : "Selecionar todos os conteudos"}
                       checked={todosConteudosSelecionados}
                       className="table-select-input"
+                      disabled={salvandoConteudo || !linhasConteudos.length}
                       onChange={alternarSelecaoTodosConteudos}
                       type="checkbox"
                     />
@@ -869,6 +1048,7 @@ export function SecaoConteudosProfessor({
                       aria-label={`Selecionar conteudo ${row.titulo}`}
                       checked={idsConteudosSelecionados.includes(row.id)}
                       className="table-select-input"
+                      disabled={salvandoConteudo}
                       onChange={() => alternarSelecaoConteudo(row.id)}
                       type="checkbox"
                     />
@@ -920,8 +1100,12 @@ export function SecaoConteudosProfessor({
                 render: (row) => Number(row.pesoProgresso || 0).toFixed(2).replace(".", ",")
               }
             ]}
-            emptyMessage="Nenhum conteudo cadastrado ainda."
-            rows={linhasConteudosOrdenadas}
+            emptyMessage={
+              temFiltroConteudoAtivo
+                ? "Nenhum conteudo encontrado com os filtros aplicados."
+                : "Nenhum conteudo cadastrado ainda."
+            }
+            rows={linhasConteudos}
           />
         </PanelCard>
         </div>
