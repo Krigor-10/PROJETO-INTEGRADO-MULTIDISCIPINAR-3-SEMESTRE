@@ -89,6 +89,7 @@ export function SecaoCursos({
       const coordenacao = coordenador?.nome || (curso.coordenadorId ? `Usuario #${curso.coordenadorId}` : "Nao atribuida");
       const resumo = resumoPorCursoId.get(curso.id) || { modulos: 0, turmas: 0, matriculas: 0 };
       const campos = [
+        curso.codigoRegistro,
         curso.titulo,
         curso.descricao,
         coordenacao,
@@ -322,6 +323,7 @@ export function SecaoCursos({
 
   const colunas = [
     ...(ehAdmin ? [{ key: "selecionar", label: "Selecionar", render: renderSelecao }] : []),
+    { key: "codigoRegistro", label: "Registro", render: (curso) => curso.codigoRegistro || "Sem codigo" },
     { key: "titulo", label: "Titulo" },
     { key: "descricao", label: "Descricao", render: (curso) => compactText(curso.descricao, 90) },
     {

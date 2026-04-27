@@ -39,11 +39,12 @@ export async function loadWorkspaceSnapshot(usuario) {
   }
 
   if (role === "Professor") {
-    const [cursos, modulos, turmas, conteudos] = await Promise.all([
+    const [cursos, modulos, turmas, conteudos, avaliacoes] = await Promise.all([
       apiRequest("/Cursos/meus"),
       apiRequest("/Modulos/meus"),
       apiRequest("/Turmas/minhas"),
-      apiRequest("/ConteudosDidaticos")
+      apiRequest("/ConteudosDidaticos"),
+      apiRequest("/Avaliacoes")
     ]);
 
     return {
@@ -51,7 +52,8 @@ export async function loadWorkspaceSnapshot(usuario) {
       cursos,
       modulos,
       turmas,
-      conteudos
+      conteudos,
+      avaliacoes
     };
   }
 

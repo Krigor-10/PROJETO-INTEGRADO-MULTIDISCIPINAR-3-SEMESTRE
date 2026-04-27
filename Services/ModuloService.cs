@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using PlataformaEnsino.API.Common;
+using PlataformaEnsino.API.Data;
 using PlataformaEnsino.API.Interfaces;
 using PlataformaEnsino.API.Models;
 
@@ -5,13 +8,16 @@ namespace PlataformaEnsino.API.Services;
 
 public class ModuloService : IModuloService
 {
+    private readonly PlataformaContext _context;
     private readonly IModuloRepository _moduloRepository;
     private readonly IGenericRepository<Curso> _cursoRepository;
 
     public ModuloService(
         IModuloRepository moduloRepository,
-        IGenericRepository<Curso> cursoRepository)
+        IGenericRepository<Curso> cursoRepository,
+        PlataformaContext context)
     {
+        _context = context;
         _moduloRepository = moduloRepository;
         _cursoRepository = cursoRepository;
     }
@@ -28,6 +34,8 @@ public class ModuloService : IModuloService
         {
             throw new InvalidOperationException("Ja existe um modulo com este titulo neste curso.");
         }
+
+        modulo.CodigoRegistro = await GerarCodigoModuloAsync();
 
         await _moduloRepository.AdicionarAsync(modulo);
         await _moduloRepository.SalvarAlteracoesAsync();
@@ -102,5 +110,20 @@ public class ModuloService : IModuloService
         {
             throw new ArgumentException("O titulo do modulo e obrigatorio.");
         }
+    }
+
+    private async Task<string> GerarCodigoModuloAsync()
+    {
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarModulo();
+
+            if (!await _context.Modulos.AnyAsync(modulo => modulo.CodigoRegistro == codigo))
+            {
+                return codigo;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o modulo.");
     }
 }

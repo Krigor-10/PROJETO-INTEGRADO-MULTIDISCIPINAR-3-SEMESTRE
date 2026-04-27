@@ -8,6 +8,7 @@ export const APP_SECTIONS = [
   { key: "cursos", label: "Cursos", roles: ["Admin", "Coordenador", "Professor"] },
   { key: "modulos", label: "Modulos", roles: ["Admin", "Coordenador"] },
   { key: "conteudos", label: "Conteudos", roles: ["Professor", "Aluno"] },
+  { key: "avaliacoes", label: "Avaliacoes", roles: ["Professor"] },
   { key: "matriculas", label: "Matriculas", roles: ["Admin", "Coordenador", "Aluno"] },
   { key: "turmas", label: "Turmas", roles: ["Admin", "Coordenador", "Professor"] }
 ];
@@ -99,6 +100,7 @@ export const EMPTY_SNAPSHOT = {
   cursos: [],
   modulos: [],
   conteudos: [],
+  avaliacoes: [],
   alunos: [],
   coordenadores: [],
   professores: [],
@@ -144,6 +146,10 @@ export function getSectionMeta(section, role) {
         role === "Professor"
           ? "Espaco do professor para montar materiais por turma e modulo."
           : "Materiais publicados para o seu percurso, organizados por turma e modulo."
+    },
+    avaliacoes: {
+      title: "Avaliacoes",
+      description: "Area do professor para preparar provas, quizzes e exercicios por turma e modulo."
     },
     matriculas: {
       title: "Fluxo de matriculas",

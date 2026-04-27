@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PlataformaEnsino.API.Common;
 using PlataformaEnsino.API.Data;
 using PlataformaEnsino.API.Interfaces;
 using PlataformaEnsino.API.Models;
@@ -24,6 +25,8 @@ public class CursoService : ICursoService
     public async Task<Curso> CriarCursoAsync(Curso novoCurso)
     {
         ValidarCurso(novoCurso);
+
+        novoCurso.CodigoRegistro = await GerarCodigoCursoAsync();
 
         await _cursoRepository.AdicionarAsync(novoCurso);
         await _cursoRepository.SalvarAlteracoesAsync();
@@ -59,6 +62,7 @@ public class CursoService : ICursoService
         var curso = await _cursoRepository.ObterPorIdAsync(cursoId)
             ?? throw new KeyNotFoundException("Curso não encontrado para adicionar o módulo.");
 
+        novoModulo.CodigoRegistro = await GerarCodigoModuloAsync();
         curso.AdicionarModulo(novoModulo);
         _cursoRepository.Atualizar(curso);
         await _cursoRepository.SalvarAlteracoesAsync();
@@ -98,5 +102,35 @@ public class CursoService : ICursoService
         {
             throw new ArgumentException("O preço não pode ser negativo.");
         }
+    }
+
+    private async Task<string> GerarCodigoCursoAsync()
+    {
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarCurso();
+
+            if (!await _context.Cursos.AnyAsync(curso => curso.CodigoRegistro == codigo))
+            {
+                return codigo;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o curso.");
+    }
+
+    private async Task<string> GerarCodigoModuloAsync()
+    {
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarModulo();
+
+            if (!await _context.Modulos.AnyAsync(modulo => modulo.CodigoRegistro == codigo))
+            {
+                return codigo;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o modulo.");
     }
 }

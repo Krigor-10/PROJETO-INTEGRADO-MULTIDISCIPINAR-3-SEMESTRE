@@ -39,26 +39,74 @@ Base de retomada: `docs/progresso-2026-04-23.md`
 - Botoes de saida e cancelamento como `Sair`, `Fechar` e `Cancelar` passaram a usar vermelho suave.
 - `Controllers/ProfessoresController.cs` passou a usar `CriarProfessorDto` no `POST /api/Professores`, validando e-mail/CPF duplicados e gerando `SenhaHash` com o perfil `Professor`.
 - `frontend/src/lib/demoApi.js` passou a espelhar `POST /Professores` no modo demo e remove a senha das respostas de listagem.
+- `Curso` e `Modulo` agora possuem `CodigoRegistro` persistido, com indices unicos e geracao automatica no backend.
+- A migracao `AdicionarCodigoRegistroAcademico` preenche codigos para cursos e modulos existentes antes de tornar o campo obrigatorio.
+- A tela de `Cursos` passou a exibir e pesquisar pelo codigo de registro.
+- A tela de `Modulos` passou a exibir e pesquisar pelo codigo de registro, incluindo o detalhe lateral do modulo.
+- O modo demo passou a preencher codigos nos dados iniciais e a corrigir bases antigas salvas no navegador sem esse campo.
+- `Matricula` agora possui `CodigoRegistro` persistido, com indice unico e geracao automatica no cadastro completo, no servico de matricula e no seed de desenvolvimento.
+- A tabela administrativa `Fluxo de matriculas` deixou de exibir o `Id` interno do banco e passou a mostrar o codigo publico da matricula.
+- O modo demo passou a gerar e corrigir `codigoRegistro` tambem para matriculas.
+- Ao aprovar uma matricula, o backend garante o `CodigoRegistro` e atribui esse codigo como a matricula oficial do aluno.
+- Novos cadastros completos de aluno ficam com `Matricula` como `Pendente` ate a aprovacao administrativa.
+- O modo demo passou a espelhar essa regra, atribuindo o codigo da matricula ao aluno aprovado.
+- A entidade `Avaliacao` passou a ser exposta para o acesso professor por meio de `GET/POST/PUT/DELETE /api/Avaliacoes`.
+- O backend valida se a turma pertence ao professor autenticado e se o modulo pertence ao mesmo curso da turma antes de salvar a avaliacao.
+- A tela do professor ganhou a nova aba `Avaliacoes`, com busca, filtros por curso/turma/tipo/status, selecao em lote, edicao, exclusao e popup de criacao.
+- O formulario de avaliacao permite definir titulo, descricao, turma, modulo, tipo, status, periodo de abertura/fechamento, tentativas, tempo limite, nota maxima e pesos.
+- O snapshot do professor agora carrega avaliacoes junto com cursos, modulos, turmas e conteudos.
+- O modo demo passou a mapear os endpoints de avaliacoes, incluir dados iniciais e preservar avaliacoes antigas no navegador.
+- A aba `Avaliacoes` agora tem o botao `Montar questoes`, habilitado quando uma avaliacao esta selecionada.
+- O modal `Montar questoes` permite cadastrar questoes de multipla escolha, verdadeiro/falso e discursivas, com enunciado, contexto, pontos, dificuldade, tema, explicacao e alternativas.
+- Para questoes objetivas, o professor preenche as alternativas e marca exatamente uma correta; para verdadeiro/falso, as opcoes `Verdadeiro` e `Falso` sao montadas automaticamente.
+- O backend passou a expor `GET/POST /api/Avaliacoes/{id}/questoes` e `DELETE /api/Avaliacoes/{id}/questoes/{questaoId}` para montar e revisar questoes da avaliacao.
+- Ao adicionar uma questao, o sistema cria a questao no banco e publica um snapshot na avaliacao, preservando alternativas e pontuacao.
+- O modo demo passou a espelhar a montagem de questoes e alternativas em `frontend/src/lib/demoApi.js`.
+
 
 ## Validacao
 
-- Frontend compilado com sucesso usando o Node empacotado:
-  `C:\Users\Krigor\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe .\node_modules\vite\bin\vite.js build`
-- Nova validacao do frontend apos trocar a coluna de `Modulos` para alunos ativos tambem executou com sucesso usando o mesmo comando.
-- Nova validacao do frontend apos mover o formulario de `Modulos` para popup tambem executou com sucesso usando o mesmo comando.
-- Nova validacao do frontend apos reposicionar o botao `Criar modulo` e remover a contagem ao lado dele tambem executou com sucesso usando o mesmo comando.
-- Nova validacao do frontend apos adicionar selecao por linha e bloco de detalhes na tela de `Modulos` tambem executou com sucesso usando o mesmo comando.
-- Nova validacao do frontend apos reposicionar o detalhe de `Modulos` como coluna lateral tambem executou com sucesso usando o mesmo comando.
-- Nova validacao do frontend apos trocar a coluna de `Professores` para cursos em andamento tambem executou com sucesso usando o mesmo comando.
-- Nova validacao do frontend apos transformar `Cursos em andamento` em nome do curso com popup de lista tambem executou com sucesso usando o mesmo comando.
-- Nova validacao do frontend apos centralizar melhor o botao `+` da coluna `Cursos em andamento` tambem executou com sucesso usando o mesmo comando.
-- Nova validacao do frontend apos adicionar o popup `Cadastrar professor` tambem executou com sucesso usando o mesmo comando.
-- Backend compilado com sucesso:
+
   `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
 - Nova validacao do backend apos ajustar o `POST /api/Professores` tambem executou com sucesso usando o mesmo comando.
+- Backend compilado com sucesso apos implementar `CodigoRegistro`:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- Frontend compilado com sucesso apos exibir `CodigoRegistro`:
+  `C:\Users\Krigor\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe .\node_modules\vite\bin\vite.js build`
+- Migracao aplicada no LocalDB com sucesso:
+  `dotnet ef database update --no-build`
+- Conferencia no LocalDB confirmou `0` cursos e `0` modulos sem codigo de registro.
+- Backend compilado com sucesso apos implementar `CodigoRegistro` em matriculas:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- Frontend compilado com sucesso apos trocar a coluna `ID` por `Codigo` no fluxo de matriculas:
+  `C:\Users\Krigor\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe .\node_modules\vite\bin\vite.js build`
+- Migracao de matriculas aplicada no LocalDB com sucesso:
+  `dotnet ef database update --configuration Release --no-build`
+- Conferencia no LocalDB confirmou `0` matriculas sem codigo de registro.
+- Backend compilado com sucesso apos mover a atribuicao oficial da matricula para a aprovacao:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- Frontend compilado com sucesso apos ajustar o modo demo para atribuir a matricula oficial na aprovacao:
+  `C:\Users\Krigor\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe .\node_modules\vite\bin\vite.js build`
+- Backend compilado com sucesso apos criar o fluxo de avaliacoes do professor:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- Frontend compilado com sucesso apos adicionar a aba `Avaliacoes` no acesso professor:
+  `C:\Users\Krigor\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe .\node_modules\vite\bin\vite.js build`
+- Conferencia do EF confirmou ausencia de mudancas pendentes no modelo apos o fluxo de avaliacoes:
+  `dotnet ef migrations has-pending-model-changes --configuration Release --no-build`
+- Smoke test autenticado em `http://localhost:5010` validou login de professor, listagem, criacao temporaria e exclusao de avaliacao em `POST/DELETE /api/Avaliacoes`.
+- Backend compilado com sucesso apos adicionar a montagem de questoes:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- Frontend compilado com sucesso apos adicionar o botao e modal `Montar questoes`:
+  `C:\Users\Krigor\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe .\node_modules\vite\bin\vite.js build`
+- Conferencia do EF seguiu sem mudancas pendentes no modelo apos a montagem de questoes:
+  `dotnet ef migrations has-pending-model-changes --configuration Release --no-build`
+- Smoke test autenticado em `http://localhost:5010` validou criar avaliacao temporaria, adicionar questao com 4 alternativas, listar questoes e remover os registros temporarios.
 
-## Proximo passo sugerido
+## VERIFICAR NA PRÓXIMA RETOMADA 27/04/2026
 
-- Avaliar e implementar `CodigoRegistro` para `Curso` e `Modulo`, mantendo o `Id` como chave interna do banco e exibindo um codigo publico/rastreavel para controle, auditoria e suporte.
-- Definir o padrao do codigo antes da implementacao, preferencialmente em formato curto, unico e pouco previsivel, como `CUR-A8F3K2` e `MOD-CUR-0001-01`.
-- Revisar no navegador o fluxo do professor em `Conteudos`: busca, filtros combinados, selecao em lote, edicao e exclusao apos filtrar.
+- banco salvou errado as questão correta, verificar como esta sendo validado a alternativa correta.
+- no acesso do aluno, criar um botão "REALIZAR AVALIAÇÃO" que vai ser publicado as avaliações do professor.
+- botão de CONCLUIR MONTAGEM na tela do professor esta vermelho, colcoar uma cor azul talvez para melhorar a UX.
+- Na tela do professor deixar apenas o botão "ADICIONAR NOVA AVALIAÇÃO" que esta no topo da tela e remover o botão "CRAIR AVALIAÇÃO" de dentro da tabela
+-na tela de MEUS CURSOS do aluno, mostra os cursos que ele esta cadastrado! quero que essa tabela seja clicavel, para 
+que quando ele clicar no curso, essa linha expanda e mostre os modulos daquele curso.

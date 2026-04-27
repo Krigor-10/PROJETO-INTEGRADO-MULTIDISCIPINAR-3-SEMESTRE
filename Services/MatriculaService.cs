@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using PlataformaEnsino.API.Common;
+using PlataformaEnsino.API.Data;
 using PlataformaEnsino.API.Interfaces;
 using PlataformaEnsino.API.Models;
 using PlataformaEnsino.API.DTOs;
@@ -7,6 +10,7 @@ namespace PlataformaEnsino.API.Services;
 
 public class MatriculaService : IMatriculaService
 {
+    private readonly PlataformaContext _context;
     private readonly IMatriculaRepository _matriculaRepository;
     private readonly IGenericRepository<Aluno> _alunoRepository;
     private readonly IGenericRepository<Turma> _turmaRepository;
@@ -14,8 +18,10 @@ public class MatriculaService : IMatriculaService
     public MatriculaService(
         IMatriculaRepository matriculaRepository,
         IGenericRepository<Aluno> alunoRepository,
-        IGenericRepository<Turma> turmaRepository)
+        IGenericRepository<Turma> turmaRepository,
+        PlataformaContext context)
     {
+        _context = context;
         _matriculaRepository = matriculaRepository;
         _alunoRepository = alunoRepository;
         _turmaRepository = turmaRepository;
@@ -41,6 +47,7 @@ public class MatriculaService : IMatriculaService
             Aluno = aluno,
             Turma = turma
         };
+        novaMatricula.CodigoRegistro = await GerarCodigoMatriculaAsync();
         novaMatricula.VincularTurma(turmaId);
         novaMatricula.RegistrarSolicitacao(DateTime.UtcNow);
 
@@ -71,6 +78,7 @@ public class MatriculaService : IMatriculaService
         return matriculas.Select(m => new MatriculaPendenteDto
         {
             Id = m.Id,
+            CodigoRegistro = m.CodigoRegistro,
             NomeAluno = m.Aluno?.Nome ?? string.Empty,
             CpfMascarado = MascararCpf(m.Aluno?.Cpf ?? string.Empty),
             NomeTurma = m.Turma?.NomeTurma ?? string.Empty,
@@ -100,7 +108,13 @@ public class MatriculaService : IMatriculaService
         var aluno = await _alunoRepository.ObterPorIdAsync(matricula.AlunoId)
             ?? throw new KeyNotFoundException("Aluno não encontrado.");
 
+        if (string.IsNullOrWhiteSpace(matricula.CodigoRegistro))
+        {
+            matricula.CodigoRegistro = await GerarCodigoMatriculaAsync();
+        }
+
         matricula.AprovarComTurma(turmaId, matricula.CursoId);
+        aluno.Matricula = matricula.CodigoRegistro;
         aluno.TurmaAtual = turma.NomeTurma;
 
         _matriculaRepository.Atualizar(matricula);
@@ -128,5 +142,20 @@ public class MatriculaService : IMatriculaService
             return cpf;
 
         return $"***.***.***-{numeros[^2]}{numeros[^1]}";
+    }
+
+    private async Task<string> GerarCodigoMatriculaAsync()
+    {
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarMatricula();
+
+            if (!await _context.Matriculas.AnyAsync(matricula => matricula.CodigoRegistro == codigo))
+            {
+                return codigo;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para a matricula.");
     }
 }

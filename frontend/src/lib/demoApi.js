@@ -80,6 +80,20 @@ export async function demoRequest(endpoint, options = {}) {
       return deleteContent(getNumericId(path));
     case /^\/ConteudosDidaticos\/aluno\/\d+$/.test(path) && method === "GET":
       return listStudentContents(getNumericId(path));
+    case path === "/Avaliacoes" && method === "GET":
+      return listTeacherEvaluations();
+    case path === "/Avaliacoes" && method === "POST":
+      return createEvaluation(payload);
+    case /^\/Avaliacoes\/\d+$/.test(path) && method === "PUT":
+      return updateEvaluation(getNumericId(path), payload);
+    case /^\/Avaliacoes\/\d+$/.test(path) && method === "DELETE":
+      return deleteEvaluation(getNumericId(path));
+    case /^\/Avaliacoes\/\d+\/questoes$/.test(path) && method === "GET":
+      return listEvaluationQuestions(getEvaluationQuestionsActionId(path));
+    case /^\/Avaliacoes\/\d+\/questoes$/.test(path) && method === "POST":
+      return createEvaluationQuestion(getEvaluationQuestionsActionId(path), payload);
+    case /^\/Avaliacoes\/\d+\/questoes\/\d+$/.test(path) && method === "DELETE":
+      return deleteEvaluationQuestion(...getEvaluationQuestionActionIds(path));
     case /^\/Progressos\/aluno\/\d+$/.test(path) && method === "GET":
       return listStudentProgress(getNumericId(path));
     case /^\/Progressos\/conteudos\/\d+\/concluir$/.test(path) && method === "PUT":
@@ -225,11 +239,13 @@ function registerStudent(payload) {
     estado: String(payload.estado || "").trim().toUpperCase(),
     tipoUsuario: "Aluno",
     ativo: true,
+    matricula: "Pendente",
     senha: String(payload.senha || "")
   });
 
   db.matriculas.push({
     id: matriculaId,
+    codigoRegistro: nextDemoRegistrationCode(db.matriculas, "MAT"),
     alunoId,
     cursoId,
     turmaId: null,
@@ -460,6 +476,7 @@ function createModule(payload) {
 
   const modulo = {
     id: nextId(db.modulos),
+    codigoRegistro: nextDemoRegistrationCode(db.modulos, "MOD"),
     cursoId,
     titulo
   };
@@ -499,6 +516,7 @@ function deleteModule(moduleId) {
 
   db.modulos.splice(moduloIndex, 1);
   db.conteudos = db.conteudos.filter((conteudo) => conteudo.moduloId !== moduleId);
+  db.avaliacoes = (db.avaliacoes || []).filter((avaliacao) => avaliacao.moduloId !== moduleId);
   saveDemoDb(db);
   return { mensagem: "Modulo demo removido." };
 }
@@ -554,9 +572,14 @@ function approveEnrollment(enrollmentId, turmaIdPayload) {
 
   const aluno = db.alunos.find((item) => item.id === matricula.alunoId);
 
+  if (!matricula.codigoRegistro) {
+    matricula.codigoRegistro = nextDemoRegistrationCode(db.matriculas, "MAT");
+  }
+
   matricula.turmaId = turma.id;
   matricula.status = 1;
   if (aluno) {
+    aluno.matricula = matricula.codigoRegistro;
     aluno.turmaAtual = turma.nomeTurma;
   }
 
@@ -588,6 +611,21 @@ function listTeacherContents() {
   return hydrateContents(
     db,
     db.conteudos.filter((conteudo) => teacherTurmaIds.has(conteudo.turmaId))
+  );
+}
+
+function listTeacherEvaluations() {
+  const user = requireProfessor();
+  const db = readDemoDb();
+  ensureEvaluationCollections(db);
+
+  const teacherTurmaIds = new Set(
+    db.turmas.filter((turma) => turma.professorId === user.id).map((turma) => turma.id)
+  );
+
+  return hydrateEvaluations(
+    db,
+    db.avaliacoes.filter((avaliacao) => teacherTurmaIds.has(avaliacao.turmaId))
   );
 }
 
@@ -765,6 +803,182 @@ function deleteContent(contentId) {
   return { mensagem: "Conteudo demo removido." };
 }
 
+function createEvaluation(payload) {
+  const user = requireProfessor();
+  const db = readDemoDb();
+  ensureEvaluationCollections(db);
+  validateEvaluationPayload(db, user, payload);
+
+  const now = new Date().toISOString();
+  const statusPublicacao = Number(payload.statusPublicacao);
+  const avaliacao = {
+    id: nextId(db.avaliacoes),
+    titulo: String(payload.titulo || "").trim(),
+    descricao: String(payload.descricao || "").trim(),
+    professorAutorId: user.id,
+    turmaId: Number(payload.turmaId),
+    moduloId: Number(payload.moduloId),
+    tipoAvaliacao: Number(payload.tipoAvaliacao),
+    statusPublicacao,
+    dataAbertura: normalizeDemoDate(payload.dataAbertura),
+    dataFechamento: normalizeDemoDate(payload.dataFechamento),
+    tentativasPermitidas: Number(payload.tentativasPermitidas),
+    tempoLimiteMinutos: payload.tempoLimiteMinutos ? Number(payload.tempoLimiteMinutos) : null,
+    notaMaxima: roundDemoNumber(payload.notaMaxima),
+    pesoNota: roundDemoNumber(payload.pesoNota),
+    pesoProgresso: roundDemoNumber(payload.pesoProgresso),
+    totalQuestoes: 0,
+    criadoEm: now,
+    atualizadoEm: now,
+    publicadoEm: statusPublicacao === 2 ? now : null
+  };
+
+  db.avaliacoes.push(avaliacao);
+  saveDemoDb(db);
+  return hydrateEvaluation(db, avaliacao);
+}
+
+function updateEvaluation(evaluationId, payload) {
+  const user = requireProfessor();
+  const db = readDemoDb();
+  ensureEvaluationCollections(db);
+
+  const avaliacao = db.avaliacoes.find((item) => item.id === evaluationId);
+  if (!avaliacao) {
+    throw new DemoApiError("Avaliacao demo nao encontrada.", 404);
+  }
+
+  ensureTeacherOwnsTurma(db, user, avaliacao.turmaId);
+  validateEvaluationPayload(db, user, payload);
+
+  const now = new Date().toISOString();
+  const nextStatus = Number(payload.statusPublicacao);
+  const wasPublished = Number(avaliacao.statusPublicacao) === 2;
+
+  avaliacao.titulo = String(payload.titulo || "").trim();
+  avaliacao.descricao = String(payload.descricao || "").trim();
+  avaliacao.turmaId = Number(payload.turmaId);
+  avaliacao.moduloId = Number(payload.moduloId);
+  avaliacao.tipoAvaliacao = Number(payload.tipoAvaliacao);
+  avaliacao.statusPublicacao = nextStatus;
+  avaliacao.dataAbertura = normalizeDemoDate(payload.dataAbertura);
+  avaliacao.dataFechamento = normalizeDemoDate(payload.dataFechamento);
+  avaliacao.tentativasPermitidas = Number(payload.tentativasPermitidas);
+  avaliacao.tempoLimiteMinutos = payload.tempoLimiteMinutos ? Number(payload.tempoLimiteMinutos) : null;
+  avaliacao.notaMaxima = roundDemoNumber(payload.notaMaxima);
+  avaliacao.pesoNota = roundDemoNumber(payload.pesoNota);
+  avaliacao.pesoProgresso = roundDemoNumber(payload.pesoProgresso);
+  avaliacao.atualizadoEm = now;
+  avaliacao.publicadoEm =
+    nextStatus === 2 ? (wasPublished ? avaliacao.publicadoEm || now : now) : nextStatus === 3 ? avaliacao.publicadoEm || null : null;
+
+  saveDemoDb(db);
+  return hydrateEvaluation(db, avaliacao);
+}
+
+function deleteEvaluation(evaluationId) {
+  const user = requireProfessor();
+  const db = readDemoDb();
+  ensureEvaluationCollections(db);
+
+  const avaliacao = db.avaliacoes.find((item) => item.id === evaluationId);
+  if (!avaliacao) {
+    throw new DemoApiError("Avaliacao demo nao encontrada.", 404);
+  }
+
+  ensureTeacherOwnsTurma(db, user, avaliacao.turmaId);
+  db.avaliacoes = db.avaliacoes.filter((item) => item.id !== evaluationId);
+  db.questoesAvaliacao = (db.questoesAvaliacao || []).filter((questao) => questao.avaliacaoId !== evaluationId);
+  saveDemoDb(db);
+  return { mensagem: "Avaliacao demo removida." };
+}
+
+function listEvaluationQuestions(evaluationId) {
+  const user = requireProfessor();
+  const db = readDemoDb();
+  ensureQuestionCollections(db);
+  ensureTeacherOwnsEvaluation(db, user, evaluationId);
+
+  return hydrateEvaluationQuestions(
+    db.questoesAvaliacao.filter((questao) => questao.avaliacaoId === evaluationId)
+  );
+}
+
+function createEvaluationQuestion(evaluationId, payload) {
+  const user = requireProfessor();
+  const db = readDemoDb();
+  ensureQuestionCollections(db);
+  ensureTeacherOwnsEvaluation(db, user, evaluationId);
+  validateEvaluationQuestionPayload(payload);
+
+  const tipoQuestao = Number(payload.tipoQuestao);
+  const ordem =
+    db.questoesAvaliacao
+      .filter((questao) => questao.avaliacaoId === evaluationId)
+      .reduce((maxOrder, questao) => Math.max(maxOrder, Number(questao.ordem) || 0), 0) + 1;
+  const questaoBancoId = nextId(db.questoesBanco);
+
+  db.questoesBanco.push({
+    id: questaoBancoId,
+    professorAutorId: user.id,
+    tituloInterno: String(payload.tituloInterno || "").trim(),
+    contexto: String(payload.contexto || "").trim(),
+    enunciado: String(payload.enunciado || "").trim(),
+    tipoQuestao,
+    tema: String(payload.tema || "").trim(),
+    subtema: String(payload.subtema || "").trim(),
+    dificuldade: Number(payload.dificuldade || 1),
+    explicacaoPosResposta: String(payload.explicacaoPosResposta || "").trim(),
+    ativa: true,
+    criadoEm: new Date().toISOString()
+  });
+
+  const questao = {
+    id: nextId(db.questoesAvaliacao),
+    avaliacaoId: evaluationId,
+    questaoBancoId,
+    ordem,
+    contexto: String(payload.contexto || "").trim(),
+    enunciado: String(payload.enunciado || "").trim(),
+    tipoQuestao,
+    explicacao: String(payload.explicacaoPosResposta || "").trim(),
+    pontos: roundDemoNumber(payload.pontos),
+    alternativas:
+      tipoQuestao === 3
+        ? []
+        : payload.alternativas.map((alternativa, index) => ({
+            id: index + 1,
+            letra: String(alternativa.letra || "").trim().toUpperCase().slice(0, 1),
+            texto: String(alternativa.texto || "").trim(),
+            ehCorreta: Boolean(alternativa.ehCorreta),
+            justificativa: "",
+            ordem: index + 1
+          }))
+  };
+
+  db.questoesAvaliacao.push(questao);
+  saveDemoDb(db);
+  return clone(questao);
+}
+
+function deleteEvaluationQuestion(evaluationId, questionId) {
+  const user = requireProfessor();
+  const db = readDemoDb();
+  ensureQuestionCollections(db);
+  ensureTeacherOwnsEvaluation(db, user, evaluationId);
+
+  const exists = db.questoesAvaliacao.some((questao) => questao.id === questionId && questao.avaliacaoId === evaluationId);
+  if (!exists) {
+    throw new DemoApiError("Questao demo nao encontrada.", 404);
+  }
+
+  db.questoesAvaliacao = db.questoesAvaliacao.filter(
+    (questao) => !(questao.id === questionId && questao.avaliacaoId === evaluationId)
+  );
+  saveDemoDb(db);
+  return { mensagem: "Questao demo removida." };
+}
+
 function validateContentPayload(db, user, payload) {
   const titulo = String(payload.titulo || "").trim();
   const turmaId = Number(payload.turmaId);
@@ -819,6 +1033,116 @@ function validateContentPayload(db, user, payload) {
   }
 }
 
+function validateEvaluationPayload(db, user, payload) {
+  const titulo = String(payload.titulo || "").trim();
+  const turmaId = Number(payload.turmaId);
+  const moduloId = Number(payload.moduloId);
+  const tipoAvaliacao = Number(payload.tipoAvaliacao);
+  const statusPublicacao = Number(payload.statusPublicacao);
+  const tentativasPermitidas = Number(payload.tentativasPermitidas);
+  const tempoLimiteMinutos = payload.tempoLimiteMinutos ? Number(payload.tempoLimiteMinutos) : null;
+  const notaMaxima = Number(payload.notaMaxima);
+  const pesoNota = Number(payload.pesoNota);
+  const pesoProgresso = Number(payload.pesoProgresso);
+  const dataAbertura = normalizeDemoDate(payload.dataAbertura);
+  const dataFechamento = normalizeDemoDate(payload.dataFechamento);
+
+  if (!titulo) {
+    throw new DemoApiError("Informe um titulo para a avaliacao demo.", 400);
+  }
+
+  if (!turmaId) {
+    throw new DemoApiError("Selecione uma turma demo.", 400);
+  }
+
+  if (!moduloId) {
+    throw new DemoApiError("Selecione um modulo demo.", 400);
+  }
+
+  if (![1, 2, 3].includes(tipoAvaliacao)) {
+    throw new DemoApiError("Tipo de avaliacao demo invalido.", 400);
+  }
+
+  if (![1, 2, 3].includes(statusPublicacao)) {
+    throw new DemoApiError("Status de publicacao demo invalido.", 400);
+  }
+
+  if (!Number.isInteger(tentativasPermitidas) || tentativasPermitidas <= 0) {
+    throw new DemoApiError("Informe pelo menos uma tentativa permitida.", 400);
+  }
+
+  if (tempoLimiteMinutos !== null && (!Number.isInteger(tempoLimiteMinutos) || tempoLimiteMinutos <= 0)) {
+    throw new DemoApiError("O tempo limite demo deve ser maior que zero.", 400);
+  }
+
+  if (!Number.isFinite(notaMaxima) || notaMaxima <= 0) {
+    throw new DemoApiError("Use uma nota maxima demo maior que zero.", 400);
+  }
+
+  if (!Number.isFinite(pesoNota) || pesoNota <= 0) {
+    throw new DemoApiError("Use um peso de nota demo maior que zero.", 400);
+  }
+
+  if (!Number.isFinite(pesoProgresso) || pesoProgresso <= 0) {
+    throw new DemoApiError("Use um peso de progresso demo maior que zero.", 400);
+  }
+
+  if (dataAbertura && dataFechamento && new Date(dataFechamento) <= new Date(dataAbertura)) {
+    throw new DemoApiError("A data de fechamento demo deve ser posterior a abertura.", 400);
+  }
+
+  const turma = ensureTeacherOwnsTurma(db, user, turmaId);
+
+  const modulo = db.modulos.find((item) => item.id === moduloId);
+  if (!modulo) {
+    throw new DemoApiError("Modulo demo nao encontrado.", 404);
+  }
+
+  if (modulo.cursoId !== turma.cursoId) {
+    throw new DemoApiError("O modulo demo precisa pertencer ao curso da turma.", 400);
+  }
+}
+
+function validateEvaluationQuestionPayload(payload) {
+  const titulo = String(payload.tituloInterno || "").trim();
+  const enunciado = String(payload.enunciado || "").trim();
+  const tipoQuestao = Number(payload.tipoQuestao);
+  const pontos = Number(payload.pontos);
+  const alternativas = Array.isArray(payload.alternativas) ? payload.alternativas : [];
+
+  if (!titulo) {
+    throw new DemoApiError("Informe um titulo interno para a questao demo.", 400);
+  }
+
+  if (!enunciado) {
+    throw new DemoApiError("Informe o enunciado da questao demo.", 400);
+  }
+
+  if (![1, 2, 3].includes(tipoQuestao)) {
+    throw new DemoApiError("Tipo de questao demo invalido.", 400);
+  }
+
+  if (!Number.isFinite(pontos) || pontos <= 0) {
+    throw new DemoApiError("A pontuacao da questao demo deve ser maior que zero.", 400);
+  }
+
+  if (tipoQuestao === 3) {
+    return;
+  }
+
+  if (alternativas.length < 2) {
+    throw new DemoApiError("Informe pelo menos duas alternativas demo.", 400);
+  }
+
+  if (alternativas.some((alternativa) => !String(alternativa.letra || "").trim() || !String(alternativa.texto || "").trim())) {
+    throw new DemoApiError("Todas as alternativas demo precisam de letra e texto.", 400);
+  }
+
+  if (alternativas.filter((alternativa) => Boolean(alternativa.ehCorreta)).length !== 1) {
+    throw new DemoApiError("Marque exatamente uma alternativa demo correta.", 400);
+  }
+}
+
 function hydrateEnrollments(db, rows) {
   const alunoById = new Map(db.alunos.map((aluno) => [aluno.id, aluno]));
   const cursoById = new Map(db.cursos.map((curso) => [curso.id, curso]));
@@ -846,6 +1170,7 @@ function buildPendingEnrollments(db) {
 
       return {
         id: matricula.id,
+        codigoRegistro: matricula.codigoRegistro,
         nomeAluno: aluno?.nome || `Aluno #${matricula.alunoId}`,
         cursoId: matricula.cursoId,
         cpfMascarado: maskCpf(aluno?.cpf || ""),
@@ -879,6 +1204,38 @@ function hydrateContent(db, conteudo) {
     turmaNome: turma?.nomeTurma || "",
     moduloTitulo: modulo?.titulo || ""
   };
+}
+
+function hydrateEvaluations(db, rows) {
+  return clone(rows)
+    .map((avaliacao) => hydrateEvaluation(db, avaliacao))
+    .sort((left, right) => {
+      const leftDate = new Date(left.dataAbertura || left.publicadoEm || left.atualizadoEm || left.criadoEm || 0).getTime();
+      const rightDate = new Date(right.dataAbertura || right.publicadoEm || right.atualizadoEm || right.criadoEm || 0).getTime();
+      return rightDate - leftDate;
+    });
+}
+
+function hydrateEvaluation(db, avaliacao) {
+  const turma = db.turmas.find((item) => item.id === avaliacao.turmaId) || null;
+  const modulo = db.modulos.find((item) => item.id === avaliacao.moduloId) || null;
+  const cursoId = turma?.cursoId || modulo?.cursoId || null;
+  const curso = db.cursos.find((item) => item.id === cursoId) || null;
+
+  return {
+    ...clone(avaliacao),
+    cursoId,
+    cursoTitulo: curso?.titulo || "",
+    turmaNome: turma?.nomeTurma || "",
+    moduloTitulo: modulo?.titulo || "",
+    totalQuestoes: Array.isArray(db.questoesAvaliacao)
+      ? db.questoesAvaliacao.filter((questao) => questao.avaliacaoId === avaliacao.id).length
+      : Number(avaliacao.totalQuestoes || 0)
+  };
+}
+
+function hydrateEvaluationQuestions(rows) {
+  return clone(rows).sort((left, right) => Number(left.ordem || 0) - Number(right.ordem || 0));
 }
 
 function buildStudentProgressSnapshot(db, studentId) {
@@ -1024,6 +1381,15 @@ function ensureProgressCollections(db) {
   db.progressos.cursos ||= [];
 }
 
+function ensureEvaluationCollections(db) {
+  db.avaliacoes ||= [];
+}
+
+function ensureQuestionCollections(db) {
+  db.questoesBanco ||= [];
+  db.questoesAvaliacao ||= [];
+}
+
 function ensureCoordinatorCollection(db) {
   db.coordenadores ||= [
     {
@@ -1061,6 +1427,52 @@ function ensureCoordinatorCollection(db) {
   ];
 }
 
+function ensureRegistrationCodes(db) {
+  ensureCollectionRegistrationCodes(db.cursos, "CUR");
+  ensureCollectionRegistrationCodes(db.modulos, "MOD");
+  ensureCollectionRegistrationCodes(db.matriculas, "MAT");
+}
+
+function ensureCollectionRegistrationCodes(items, prefix) {
+  const usedCodes = new Set();
+
+  items.forEach((item) => {
+    const currentCode = String(item.codigoRegistro || "").trim().toUpperCase();
+
+    if (currentCode && !usedCodes.has(currentCode)) {
+      item.codigoRegistro = currentCode;
+      usedCodes.add(currentCode);
+      return;
+    }
+
+    item.codigoRegistro = buildDemoRegistrationCode(prefix, item.id, usedCodes);
+    usedCodes.add(item.codigoRegistro);
+  });
+}
+
+function nextDemoRegistrationCode(items, prefix) {
+  const usedCodes = new Set(items.map((item) => String(item.codigoRegistro || "").trim().toUpperCase()).filter(Boolean));
+  return buildDemoRegistrationCode(prefix, nextId(items), usedCodes);
+}
+
+function buildDemoRegistrationCode(prefix, id, usedCodes) {
+  let attempt = 0;
+
+  while (attempt < 100) {
+    const seed = Math.abs((Number(id) || 0) * 7919 + attempt * 104729);
+    const suffix = seed.toString(36).toUpperCase().padStart(6, "0").slice(-6);
+    const code = `${prefix}-${suffix}`;
+
+    if (!usedCodes.has(code)) {
+      return code;
+    }
+
+    attempt += 1;
+  }
+
+  throw new DemoApiError("Nao foi possivel gerar um codigo demo unico.", 500);
+}
+
 function sumDemoWeights(conteudos) {
   return roundDemoNumber(
     conteudos.reduce((total, conteudo) => total + Math.max(Number(conteudo.pesoProgresso || 0), 0), 0)
@@ -1087,6 +1499,15 @@ function roundDemoNumber(value) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
+function normalizeDemoDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 function ensureTeacherOwnsTurma(db, user, turmaId) {
   const turma = db.turmas.find((item) => item.id === turmaId);
 
@@ -1099,6 +1520,17 @@ function ensureTeacherOwnsTurma(db, user, turmaId) {
   }
 
   return turma;
+}
+
+function ensureTeacherOwnsEvaluation(db, user, evaluationId) {
+  const avaliacao = db.avaliacoes.find((item) => item.id === evaluationId);
+
+  if (!avaliacao) {
+    throw new DemoApiError("Avaliacao demo nao encontrada.", 404);
+  }
+
+  ensureTeacherOwnsTurma(db, user, avaliacao.turmaId);
+  return avaliacao;
 }
 
 function requireAuthenticatedUser() {
@@ -1160,6 +1592,9 @@ function readDemoDb() {
       if (isValidDemoDb(parsed)) {
         ensureProgressCollections(parsed);
         ensureCoordinatorCollection(parsed);
+        ensureEvaluationCollections(parsed);
+        ensureQuestionCollections(parsed);
+        ensureRegistrationCodes(parsed);
         saveDemoDb(parsed);
         return parsed;
       }
@@ -1169,6 +1604,9 @@ function readDemoDb() {
   }
 
   const initialDb = createInitialDemoDb();
+  ensureEvaluationCollections(initialDb);
+  ensureQuestionCollections(initialDb);
+  ensureRegistrationCodes(initialDb);
   saveDemoDb(initialDb);
   return initialDb;
 }
@@ -1187,7 +1625,10 @@ function isValidDemoDb(db) {
       Array.isArray(db.professores) &&
       Array.isArray(db.turmas) &&
       Array.isArray(db.matriculas) &&
-      Array.isArray(db.conteudos)
+      Array.isArray(db.conteudos) &&
+      (db.avaliacoes === undefined || Array.isArray(db.avaliacoes)) &&
+      (db.questoesBanco === undefined || Array.isArray(db.questoesBanco)) &&
+      (db.questoesAvaliacao === undefined || Array.isArray(db.questoesAvaliacao))
   );
 }
 
@@ -1196,6 +1637,7 @@ function createInitialDemoDb() {
     cursos: [
       {
         id: 1,
+        codigoRegistro: "CUR-007Q0N",
         titulo: "Programacao Aplicada",
         descricao: "Projetos guiados com fundamentos de logica, API e entrega incremental.",
         preco: 189.9,
@@ -1203,6 +1645,7 @@ function createInitialDemoDb() {
       },
       {
         id: 2,
+        codigoRegistro: "CUR-00F60A",
         titulo: "Banco de Dados",
         descricao: "Modelagem relacional, SQL e leitura de cenarios orientados a produto.",
         preco: 169.9,
@@ -1210,6 +1653,7 @@ function createInitialDemoDb() {
       },
       {
         id: 3,
+        codigoRegistro: "CUR-00MXZX",
         titulo: "Analise de Dados",
         descricao: "Metricas, dashboards e interpretacao de indicadores com foco academico.",
         preco: 209.9,
@@ -1217,12 +1661,12 @@ function createInitialDemoDb() {
       }
     ],
     modulos: [
-      { id: 11, cursoId: 1, titulo: "Fundamentos de logica" },
-      { id: 12, cursoId: 1, titulo: "Projeto web inicial" },
-      { id: 21, cursoId: 2, titulo: "Modelagem relacional" },
-      { id: 22, cursoId: 2, titulo: "Consultas SQL" },
-      { id: 31, cursoId: 3, titulo: "Leitura de indicadores" },
-      { id: 32, cursoId: 3, titulo: "Storytelling com dados" }
+      { id: 11, codigoRegistro: "MOD-02DEOJ", cursoId: 1, titulo: "Fundamentos de logica" },
+      { id: 12, codigoRegistro: "MOD-02KUC6", cursoId: 1, titulo: "Projeto web inicial" },
+      { id: 21, codigoRegistro: "MOD-04MVGF", cursoId: 2, titulo: "Modelagem relacional" },
+      { id: 22, codigoRegistro: "MOD-04TBY2", cursoId: 2, titulo: "Consultas SQL" },
+      { id: 31, codigoRegistro: "MOD-06ULOB", cursoId: 3, titulo: "Leitura de indicadores" },
+      { id: 32, codigoRegistro: "MOD-0711ZY", cursoId: 3, titulo: "Storytelling com dados" }
     ],
     alunos: [
       {
@@ -1472,6 +1916,73 @@ function createInitialDemoDb() {
         publicadoEm: "2026-03-19T11:15:00.000Z"
       }
     ],
+    avaliacoes: [
+      {
+        id: 701,
+        titulo: "Quiz diagnostico do modulo",
+        descricao: "Primeira avaliacao curta para medir entendimento dos fundamentos.",
+        professorAutorId: 301,
+        turmaId: 401,
+        moduloId: 11,
+        tipoAvaliacao: 1,
+        statusPublicacao: 2,
+        dataAbertura: "2026-04-20T12:00:00.000Z",
+        dataFechamento: "2026-05-05T22:59:00.000Z",
+        tentativasPermitidas: 2,
+        tempoLimiteMinutos: 30,
+        notaMaxima: 10,
+        pesoNota: 1,
+        pesoProgresso: 0.5,
+        totalQuestoes: 0,
+        criadoEm: "2026-04-18T10:00:00.000Z",
+        atualizadoEm: "2026-04-20T12:00:00.000Z",
+        publicadoEm: "2026-04-20T12:00:00.000Z"
+      },
+      {
+        id: 702,
+        titulo: "Prova pratica de indicadores",
+        descricao: "Avaliacao em rascunho para a turma de dados.",
+        professorAutorId: 301,
+        turmaId: 403,
+        moduloId: 31,
+        tipoAvaliacao: 2,
+        statusPublicacao: 1,
+        dataAbertura: null,
+        dataFechamento: null,
+        tentativasPermitidas: 1,
+        tempoLimiteMinutos: 90,
+        notaMaxima: 10,
+        pesoNota: 2,
+        pesoProgresso: 1,
+        totalQuestoes: 0,
+        criadoEm: "2026-04-21T18:00:00.000Z",
+        atualizadoEm: "2026-04-21T18:00:00.000Z",
+        publicadoEm: null
+      },
+      {
+        id: 703,
+        titulo: "Exercicio SQL da semana",
+        descricao: "Atividade avaliativa publicada para a turma de Banco de Dados.",
+        professorAutorId: 302,
+        turmaId: 402,
+        moduloId: 22,
+        tipoAvaliacao: 3,
+        statusPublicacao: 2,
+        dataAbertura: "2026-04-19T14:00:00.000Z",
+        dataFechamento: "2026-05-03T22:59:00.000Z",
+        tentativasPermitidas: 3,
+        tempoLimiteMinutos: null,
+        notaMaxima: 10,
+        pesoNota: 1,
+        pesoProgresso: 0.4,
+        totalQuestoes: 0,
+        criadoEm: "2026-04-17T14:00:00.000Z",
+        atualizadoEm: "2026-04-19T14:00:00.000Z",
+        publicadoEm: "2026-04-19T14:00:00.000Z"
+      }
+    ],
+    questoesBanco: [],
+    questoesAvaliacao: [],
     progressos: {
       conteudos: [],
       modulos: [],
@@ -1553,6 +2064,29 @@ function getProgressContentActionId(path) {
   }
 
   return id;
+}
+
+function getEvaluationQuestionsActionId(path) {
+  const match = String(path).match(/^\/Avaliacoes\/(\d+)\/questoes$/);
+  const id = Number(match?.[1]);
+
+  if (!Number.isInteger(id)) {
+    throw new DemoApiError("Identificador demo invalido.", 400);
+  }
+
+  return id;
+}
+
+function getEvaluationQuestionActionIds(path) {
+  const match = String(path).match(/^\/Avaliacoes\/(\d+)\/questoes\/(\d+)$/);
+  const evaluationId = Number(match?.[1]);
+  const questionId = Number(match?.[2]);
+
+  if (!Number.isInteger(evaluationId) || !Number.isInteger(questionId)) {
+    throw new DemoApiError("Identificador demo invalido.", 400);
+  }
+
+  return [evaluationId, questionId];
 }
 
 function clone(value) {

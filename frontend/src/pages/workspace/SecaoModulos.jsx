@@ -165,7 +165,7 @@ export function SecaoModulos({
       return proximosModulos.filter((modulo) => {
         const nomeCurso = cursoPorId.get(modulo.cursoId)?.titulo || `Curso #${modulo.cursoId}`;
         const quantidadeAlunosAtivos = alunosAtivosPorCurso.get(modulo.cursoId) || 0;
-        const campos = [modulo.titulo, nomeCurso, String(quantidadeAlunosAtivos)];
+        const campos = [modulo.codigoRegistro, modulo.titulo, nomeCurso, String(quantidadeAlunosAtivos)];
 
         return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
       });
@@ -706,6 +706,10 @@ export function SecaoModulos({
         >
           <div className="module-detail-grid">
             <article className="module-detail-card">
+              <span>Codigo de registro</span>
+              <strong>{moduloDetalhado.codigoRegistro || "Sem codigo"}</strong>
+            </article>
+            <article className="module-detail-card">
               <span>Modulo</span>
               <strong>{moduloDetalhado.titulo}</strong>
             </article>
@@ -747,6 +751,7 @@ export function SecaoModulos({
         <DataTable
           columns={[
             { key: "selecionar", label: "Selecionar", render: renderSelecaoModulo },
+            { key: "codigoRegistro", label: "Registro", render: (row) => row.codigoRegistro || "Sem codigo" },
             { key: "titulo", label: "Modulo" },
             {
               key: "cursoId",

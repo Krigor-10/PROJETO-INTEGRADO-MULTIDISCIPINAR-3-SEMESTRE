@@ -99,6 +99,7 @@ public class ModulosController : ControllerBase
         return new ModuloResponseDto
         {
             Id = modulo.Id,
+            CodigoRegistro = modulo.CodigoRegistro,
             Titulo = modulo.Titulo,
             CursoId = modulo.CursoId,
             DataCriacao = modulo.DataCriacao

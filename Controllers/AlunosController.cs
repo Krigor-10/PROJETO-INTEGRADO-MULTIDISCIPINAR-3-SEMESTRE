@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PlataformaEnsino.API.Common;
 using PlataformaEnsino.API.Data;
 using PlataformaEnsino.API.DTOs;
 using PlataformaEnsino.API.Models;
@@ -79,7 +80,7 @@ namespace PlataformaEnsino.API.Controllers
                     Bairro = dto.Bairro.Trim(),
                     Cidade = dto.Cidade.Trim(),
                     Estado = dto.Estado.Trim().ToUpper(),
-                    Matricula = $"MAT-{DateTime.UtcNow:yyyyMMddHHmmssfff}"
+                    Matricula = "Pendente"
                 };
                 aluno.ConfigurarAcesso("Aluno", BCrypt.Net.BCrypt.HashPassword(dto.Senha));
 
@@ -89,7 +90,8 @@ namespace PlataformaEnsino.API.Controllers
                 var matricula = new Matricula
                 {
                     AlunoId = aluno.Id,
-                    CursoId = dto.CursoId
+                    CursoId = dto.CursoId,
+                    CodigoRegistro = await GerarCodigoMatriculaAsync()
                 };
                 matricula.RegistrarSolicitacao(DateTime.UtcNow);
 
@@ -110,6 +112,22 @@ namespace PlataformaEnsino.API.Controllers
                 });
             }
         }
+
+        private async Task<string> GerarCodigoMatriculaAsync()
+        {
+            for (var tentativa = 0; tentativa < 10; tentativa++)
+            {
+                var codigo = CodigoRegistroGenerator.GerarMatricula();
+
+                if (!await _context.Matriculas.AnyAsync(matricula => matricula.CodigoRegistro == codigo))
+                {
+                    return codigo;
+                }
+            }
+
+            throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para a matricula.");
+        }
+
         [Authorize]
         [HttpGet("teste-jwt")]
         public IActionResult TesteJwt()

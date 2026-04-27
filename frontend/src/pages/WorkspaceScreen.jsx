@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { InlineMessage, PanelCard, RouteLink, StatusPill } from "../components/Primitives.jsx";
 import { SecaoAlunos } from "./workspace/SecaoAlunos.jsx";
+import { SecaoAvaliacoesProfessor } from "./workspace/SecaoAvaliacoesProfessor.jsx";
 import { SecaoConteudosProfessor } from "./workspace/SecaoConteudosProfessor.jsx";
 import { SecaoCursos } from "./workspace/SecaoCursos.jsx";
 import { SecaoModulos } from "./workspace/SecaoModulos.jsx";
@@ -32,6 +33,7 @@ export default function WorkspaceScreen({
   const [refreshKey, setRefreshKey] = useState(0);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [solicitacaoNovoConteudo, setSolicitacaoNovoConteudo] = useState(0);
+  const [solicitacaoNovaAvaliacao, setSolicitacaoNovaAvaliacao] = useState(0);
   const [cursoEmFocoPorSecao, setCursoEmFocoPorSecao] = useState({
     modulos: null,
     turmas: null
@@ -58,6 +60,7 @@ export default function WorkspaceScreen({
     ? activeSection === "dashboard"
     : !isProfessor && activeSection !== "conteudos" && !(isStudent && activeSection === "matriculas");
   const mostrarAcaoCriarConteudo = isProfessor && activeSection === "conteudos";
+  const mostrarAcaoCriarAvaliacao = isProfessor && activeSection === "avaliacoes";
 
   useEffect(() => {
     const canonicalPath = activeSection === "dashboard" ? "/app" : `/app/${activeSection}`;
@@ -159,6 +162,7 @@ export default function WorkspaceScreen({
     () =>
       snapshot.matriculas.map((matricula) => ({
         id: matricula.id,
+        codigoRegistro: matricula.codigoRegistro,
         alunoId: matricula.alunoId,
         cursoId: matricula.cursoId,
         turmaId: matricula.turmaId,
@@ -346,7 +350,8 @@ export default function WorkspaceScreen({
       return [
         `${professorTurmas.length} turma(s) vinculada(s)`,
         `${professorCursos.length} curso(s) acompanhados`,
-        `${snapshot.conteudos.length} conteudo(s) no workspace`
+        `${snapshot.conteudos.length} conteudo(s) no workspace`,
+        `${snapshot.avaliacoes.length} avaliacao(oes) planejada(s)`
       ];
     }
 
@@ -363,6 +368,7 @@ export default function WorkspaceScreen({
     professorCursos.length,
     professorTurmas.length,
     snapshot.alunos.length,
+    snapshot.avaliacoes.length,
     snapshot.conteudos.length,
     snapshot.cursos.length,
     snapshot.pendentes.length,
@@ -528,14 +534,18 @@ export default function WorkspaceScreen({
             <h1>{sectionMeta.title}</h1>
             <p>{sectionMeta.description}</p>
           </div>
-          {mostrarAcaoCriarConteudo ? (
+          {mostrarAcaoCriarConteudo || mostrarAcaoCriarAvaliacao ? (
             <div className="workspace-hero__actions">
               <button
                 className="solid-button workspace-hero__primary-action"
-                onClick={() => setSolicitacaoNovoConteudo((current) => current + 1)}
+                onClick={() =>
+                  mostrarAcaoCriarAvaliacao
+                    ? setSolicitacaoNovaAvaliacao((current) => current + 1)
+                    : setSolicitacaoNovoConteudo((current) => current + 1)
+                }
                 type="button"
               >
-                Adicionar novo conteudo
+                {mostrarAcaoCriarAvaliacao ? "Adicionar nova avaliacao" : "Adicionar novo conteudo"}
               </button>
             </div>
           ) : null}
@@ -666,6 +676,19 @@ export default function WorkspaceScreen({
                   progressos={snapshot.progressos}
                 />
               )
+            ) : null}
+
+            {activeSection === "avaliacoes" && isProfessor ? (
+              <SecaoAvaliacoesProfessor
+                avaliacoes={snapshot.avaliacoes}
+                cursos={snapshot.cursos}
+                modulos={snapshot.modulos}
+                onRefresh={() => setRefreshKey((current) => current + 1)}
+                onSessionExpired={onSessionExpired}
+                solicitacaoNovaAvaliacao={solicitacaoNovaAvaliacao}
+                turmas={snapshot.turmas}
+                usuario={usuario}
+              />
             ) : null}
 
             {activeSection === "matriculas" ? (

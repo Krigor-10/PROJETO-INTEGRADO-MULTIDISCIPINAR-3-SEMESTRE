@@ -7,6 +7,11 @@ namespace PlataformaEnsino.API.Models;
 public class Matricula
 {
     public int Id { get; set; }
+
+    [Required]
+    [StringLength(16)]
+    public string CodigoRegistro { get; set; } = string.Empty;
+
     public DateTime DataSolicitacao { get; private set; } = DateTime.UtcNow;
 
     [Range(0, 10)]

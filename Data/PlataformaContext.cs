@@ -72,9 +72,27 @@ public class PlataformaContext : DbContext
             .Property(c => c.Preco)
             .HasPrecision(10, 2);
 
+        modelBuilder.Entity<Curso>()
+            .Property(c => c.CodigoRegistro)
+            .HasMaxLength(16)
+            .IsRequired();
+
+        modelBuilder.Entity<Curso>()
+            .HasIndex(c => c.CodigoRegistro)
+            .IsUnique();
+
         modelBuilder.Entity<Matricula>()
             .Property(m => m.NotaFinal)
             .HasPrecision(4, 2);
+
+        modelBuilder.Entity<Matricula>()
+            .Property(m => m.CodigoRegistro)
+            .HasMaxLength(16)
+            .IsRequired();
+
+        modelBuilder.Entity<Matricula>()
+            .HasIndex(m => m.CodigoRegistro)
+            .IsUnique();
 
         modelBuilder.Entity<Turma>()
             .HasIndex(t => new { t.NomeTurma, t.CursoId })
@@ -82,6 +100,15 @@ public class PlataformaContext : DbContext
 
         modelBuilder.Entity<Modulo>()
             .HasIndex(m => new { m.CursoId, m.Titulo })
+            .IsUnique();
+
+        modelBuilder.Entity<Modulo>()
+            .Property(m => m.CodigoRegistro)
+            .HasMaxLength(16)
+            .IsRequired();
+
+        modelBuilder.Entity<Modulo>()
+            .HasIndex(m => m.CodigoRegistro)
             .IsUnique();
 
         modelBuilder.Entity<ConteudoDidatico>()

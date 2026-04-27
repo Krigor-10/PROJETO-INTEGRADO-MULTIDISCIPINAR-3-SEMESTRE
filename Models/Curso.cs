@@ -9,6 +9,10 @@ public class Curso
     public int Id { get; set; }
 
     [Required]
+    [StringLength(16)]
+    public string CodigoRegistro { get; set; } = string.Empty;
+
+    [Required]
     [StringLength(150)]
     public string Titulo { get; set; } = string.Empty;
 

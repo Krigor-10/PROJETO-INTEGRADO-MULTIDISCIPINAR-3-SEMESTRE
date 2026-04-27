@@ -1,5 +1,6 @@
 using BCrypt.Net;
 using Microsoft.EntityFrameworkCore;
+using PlataformaEnsino.API.Common;
 using PlataformaEnsino.API.Models;
 
 namespace PlataformaEnsino.API.Data;
@@ -374,21 +375,21 @@ public static class DevelopmentDataSeeder
     {
         var course = await context.Cursos.FirstOrDefaultAsync(item => item.Titulo == title);
 
-        if (course is not null)
+        if (course is null)
         {
-            return course;
+            course = new Curso
+            {
+                Titulo = title,
+                Descricao = description,
+                Preco = price,
+                CriadoPor = createdBy,
+                CoordenadorId = coordinatorId
+            };
+
+            context.Cursos.Add(course);
         }
 
-        course = new Curso
-        {
-            Titulo = title,
-            Descricao = description,
-            Preco = price,
-            CriadoPor = createdBy,
-            CoordenadorId = coordinatorId
-        };
-
-        context.Cursos.Add(course);
+        await EnsureCourseRegistrationCodeAsync(context, course);
         return course;
     }
 
@@ -448,19 +449,73 @@ public static class DevelopmentDataSeeder
     {
         var modulo = await context.Modulos.FirstOrDefaultAsync(item => item.Titulo == title && item.CursoId == courseId);
 
-        if (modulo is not null)
+        if (modulo is null)
         {
-            return modulo;
+            modulo = new Modulo
+            {
+                Titulo = title,
+                CursoId = courseId
+            };
+
+            context.Modulos.Add(modulo);
         }
 
-        modulo = new Modulo
-        {
-            Titulo = title,
-            CursoId = courseId
-        };
-
-        context.Modulos.Add(modulo);
+        await EnsureModuleRegistrationCodeAsync(context, modulo);
         return modulo;
+    }
+
+    private static async Task EnsureCourseRegistrationCodeAsync(PlataformaContext context, Curso course)
+    {
+        if (!string.IsNullOrWhiteSpace(course.CodigoRegistro))
+        {
+            return;
+        }
+
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarCurso();
+            var emUsoLocal = context.Cursos.Local.Any(item =>
+                !ReferenceEquals(item, course) &&
+                item.CodigoRegistro == codigo);
+            var emUsoBanco = await context.Cursos.AnyAsync(item =>
+                item.Id != course.Id &&
+                item.CodigoRegistro == codigo);
+
+            if (!emUsoLocal && !emUsoBanco)
+            {
+                course.CodigoRegistro = codigo;
+                return;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o curso de teste.");
+    }
+
+    private static async Task EnsureModuleRegistrationCodeAsync(PlataformaContext context, Modulo modulo)
+    {
+        if (!string.IsNullOrWhiteSpace(modulo.CodigoRegistro))
+        {
+            return;
+        }
+
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarModulo();
+            var emUsoLocal = context.Modulos.Local.Any(item =>
+                !ReferenceEquals(item, modulo) &&
+                item.CodigoRegistro == codigo);
+            var emUsoBanco = await context.Modulos.AnyAsync(item =>
+                item.Id != modulo.Id &&
+                item.CodigoRegistro == codigo);
+
+            if (!emUsoLocal && !emUsoBanco)
+            {
+                modulo.CodigoRegistro = codigo;
+                return;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o modulo de teste.");
     }
 
     private static async Task EnsureConteudoAsync(
@@ -538,6 +593,7 @@ public static class DevelopmentDataSeeder
             }
         }
 
+        await EnsureEnrollmentRegistrationCodeAsync(context, enrollment);
         student.TurmaAtual = turma.NomeTurma;
     }
 
@@ -550,6 +606,7 @@ public static class DevelopmentDataSeeder
 
         if (enrollment is not null)
         {
+            await EnsureEnrollmentRegistrationCodeAsync(context, enrollment);
             return;
         }
 
@@ -559,7 +616,35 @@ public static class DevelopmentDataSeeder
             CursoId = course.Id
         };
         pendingEnrollment.RegistrarSolicitacao(DateTime.UtcNow.AddDays(-1));
+        await EnsureEnrollmentRegistrationCodeAsync(context, pendingEnrollment);
 
         context.Matriculas.Add(pendingEnrollment);
+    }
+
+    private static async Task EnsureEnrollmentRegistrationCodeAsync(PlataformaContext context, Matricula enrollment)
+    {
+        if (!string.IsNullOrWhiteSpace(enrollment.CodigoRegistro))
+        {
+            return;
+        }
+
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarMatricula();
+            var emUsoLocal = context.Matriculas.Local.Any(item =>
+                !ReferenceEquals(item, enrollment) &&
+                item.CodigoRegistro == codigo);
+            var emUsoBanco = await context.Matriculas.AnyAsync(item =>
+                item.Id != enrollment.Id &&
+                item.CodigoRegistro == codigo);
+
+            if (!emUsoLocal && !emUsoBanco)
+            {
+                enrollment.CodigoRegistro = codigo;
+                return;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para a matricula de teste.");
     }
 }
