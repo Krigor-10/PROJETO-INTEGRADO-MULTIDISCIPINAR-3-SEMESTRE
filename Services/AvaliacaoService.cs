@@ -33,6 +33,61 @@ public class AvaliacaoService : IAvaliacaoService
             .ToListAsync();
     }
 
+    public async Task<IEnumerable<AvaliacaoAlunoResponseDto>> ListarAvaliacoesPorAlunoAsync(int alunoId)
+    {
+        await ValidarAlunoAsync(alunoId);
+
+        var matriculas = await _context.Matriculas
+            .AsNoTracking()
+            .Where(matricula =>
+                matricula.AlunoId == alunoId &&
+                matricula.Status == StatusMatricula.Aprovada &&
+                matricula.TurmaId.HasValue)
+            .ToListAsync();
+
+        if (matriculas.Count == 0)
+        {
+            return Enumerable.Empty<AvaliacaoAlunoResponseDto>();
+        }
+
+        var turmaIds = matriculas.Select(matricula => matricula.TurmaId!.Value).Distinct().ToList();
+        var matriculaPorTurmaId = matriculas
+            .GroupBy(matricula => matricula.TurmaId!.Value)
+            .ToDictionary(grupo => grupo.Key, grupo => grupo.First().Id);
+        var matriculaIds = matriculas.Select(matricula => matricula.Id).ToList();
+
+        var tentativas = await _context.TentativasAvaliacao
+            .AsNoTracking()
+            .Where(tentativa => matriculaIds.Contains(tentativa.MatriculaId))
+            .ToListAsync();
+        var tentativasPorAvaliacao = tentativas
+            .GroupBy(tentativa => tentativa.AvaliacaoId)
+            .ToDictionary(grupo => grupo.Key, grupo => grupo.OrderBy(item => item.NumeroTentativa).ToList());
+
+        var avaliacoes = await _context.Avaliacoes
+            .AsNoTracking()
+            .Where(avaliacao =>
+                avaliacao.StatusPublicacao == StatusPublicacao.Publicado &&
+                turmaIds.Contains(avaliacao.TurmaId))
+            .Include(avaliacao => avaliacao.Turma)
+            .Include(avaliacao => avaliacao.Modulo)
+                .ThenInclude(modulo => modulo!.Curso)
+            .Include(avaliacao => avaliacao.Questoes)
+            .OrderBy(avaliacao => avaliacao.DataAbertura ?? avaliacao.PublicadoEm ?? avaliacao.CriadoEm)
+            .ThenBy(avaliacao => avaliacao.Turma!.NomeTurma)
+            .ThenBy(avaliacao => avaliacao.Modulo!.Titulo)
+            .ThenBy(avaliacao => avaliacao.Titulo)
+            .ToListAsync();
+
+        return avaliacoes.Select(avaliacao =>
+            MapAvaliacaoAluno(
+                avaliacao,
+                matriculaPorTurmaId[avaliacao.TurmaId],
+                tentativasPorAvaliacao.TryGetValue(avaliacao.Id, out var tentativasAvaliacao)
+                    ? tentativasAvaliacao
+                    : new List<TentativaAvaliacao>()));
+    }
+
     public async Task<Avaliacao> ObterAvaliacaoPorProfessorAsync(int id, int professorId)
     {
         await ValidarProfessorAsync(professorId);
@@ -113,6 +168,16 @@ public class AvaliacaoService : IAvaliacaoService
             .ToListAsync();
     }
 
+    public async Task<IEnumerable<QuestaoAvaliacaoAlunoResponseDto>> ListarQuestoesPorAlunoAsync(int avaliacaoId, int alunoId)
+    {
+        var (avaliacao, _) = await ObterAvaliacaoPublicadaDoAlunoAsync(avaliacaoId, alunoId);
+
+        return avaliacao.Questoes
+            .OrderBy(questao => questao.Ordem)
+            .Select(MapQuestaoAluno)
+            .ToList();
+    }
+
     public async Task<QuestaoPublicada> AdicionarQuestaoAsync(int avaliacaoId, int professorId, CriarQuestaoAvaliacaoDto dto)
     {
         ArgumentNullException.ThrowIfNull(dto);
@@ -179,6 +244,108 @@ public class AvaliacaoService : IAvaliacaoService
         await _context.SaveChangesAsync();
     }
 
+    public async Task<TentativaAvaliacaoAlunoResponseDto> EnviarRespostasAlunoAsync(int avaliacaoId, int alunoId, EnviarAvaliacaoAlunoDto dto)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        var (avaliacao, matricula) = await ObterAvaliacaoPublicadaDoAlunoAsync(avaliacaoId, alunoId);
+        ValidarPeriodoAvaliacao(avaliacao);
+
+        var questoes = avaliacao.Questoes.OrderBy(questao => questao.Ordem).ToList();
+        if (questoes.Count == 0)
+        {
+            throw new InvalidOperationException("A avaliacao ainda nao possui questoes publicadas.");
+        }
+
+        var respostasDto = dto.Respostas ?? new List<RespostaAvaliacaoAlunoDto>();
+        if (respostasDto.Count == 0)
+        {
+            throw new ArgumentException("Envie as respostas da avaliacao.");
+        }
+
+        var questaoIds = questoes.Select(questao => questao.Id).ToHashSet();
+        var respostasDuplicadas = respostasDto
+            .GroupBy(resposta => resposta.QuestaoId)
+            .Any(grupo => grupo.Count() > 1);
+        if (respostasDuplicadas || respostasDto.Any(resposta => !questaoIds.Contains(resposta.QuestaoId)) || respostasDto.Count != questoes.Count)
+        {
+            throw new ArgumentException("Responda exatamente uma vez cada questao publicada.");
+        }
+
+        var tentativasRealizadas = await _context.TentativasAvaliacao
+            .CountAsync(tentativa => tentativa.AvaliacaoId == avaliacaoId && tentativa.MatriculaId == matricula.Id);
+        if (tentativasRealizadas >= avaliacao.TentativasPermitidas)
+        {
+            throw new InvalidOperationException("O limite de tentativas para esta avaliacao ja foi atingido.");
+        }
+
+        var respostasPorQuestao = respostasDto.ToDictionary(resposta => resposta.QuestaoId);
+        var tentativa = new TentativaAvaliacao
+        {
+            AvaliacaoId = avaliacao.Id,
+            MatriculaId = matricula.Id
+        };
+        var agora = DateTime.UtcNow;
+        tentativa.Iniciar(tentativasRealizadas + 1, agora);
+
+        var notaObjetiva = 0m;
+        var possuiDiscursiva = false;
+
+        foreach (var questao in questoes)
+        {
+            var respostaDto = respostasPorQuestao[questao.Id];
+            var resposta = new RespostaAluno
+            {
+                QuestaoPublicadaId = questao.Id,
+                RespostaTexto = string.Empty
+            };
+
+            if (questao.TipoQuestao == TipoQuestao.Discursiva)
+            {
+                var texto = (respostaDto.RespostaTexto ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(texto))
+                {
+                    throw new ArgumentException("Preencha a resposta discursiva antes de enviar.");
+                }
+
+                possuiDiscursiva = true;
+                resposta.RespostaTexto = texto;
+                resposta.Corrigir(null, 0);
+            }
+            else
+            {
+                if (!respostaDto.AlternativaId.HasValue)
+                {
+                    throw new ArgumentException("Selecione uma alternativa para cada questao objetiva.");
+                }
+
+                var alternativa = questao.Alternativas.FirstOrDefault(item => item.Id == respostaDto.AlternativaId.Value)
+                    ?? throw new ArgumentException("Alternativa selecionada nao pertence a questao informada.");
+                var correta = alternativa.EhCorreta;
+                var pontos = correta ? questao.Pontos : 0m;
+
+                resposta.AlternativaQuestaoPublicadaId = alternativa.Id;
+                resposta.RespostaTexto = alternativa.Texto;
+                resposta.Corrigir(correta, pontos);
+                notaObjetiva += pontos;
+            }
+
+            resposta.RegistrarEnvio(agora);
+            tentativa.Respostas.Add(resposta);
+        }
+
+        tentativa.MarcarEnvio(agora);
+        if (!possuiDiscursiva)
+        {
+            tentativa.MarcarCorrecao(decimal.Round(notaObjetiva, 2, MidpointRounding.AwayFromZero), agora);
+        }
+
+        await _context.TentativasAvaliacao.AddAsync(tentativa);
+        await _context.SaveChangesAsync();
+
+        return MapTentativaAluno(tentativa, avaliacao);
+    }
+
     private async Task<Avaliacao?> ObterDetalheAsync(int id)
     {
         return await _context.Avaliacoes
@@ -189,12 +356,48 @@ public class AvaliacaoService : IAvaliacaoService
             .FirstOrDefaultAsync(avaliacao => avaliacao.Id == id);
     }
 
+    private async Task<(Avaliacao Avaliacao, Matricula Matricula)> ObterAvaliacaoPublicadaDoAlunoAsync(int avaliacaoId, int alunoId)
+    {
+        await ValidarAlunoAsync(alunoId);
+
+        var avaliacao = await _context.Avaliacoes
+            .AsNoTracking()
+            .Where(item => item.Id == avaliacaoId && item.StatusPublicacao == StatusPublicacao.Publicado)
+            .Include(item => item.Turma)
+            .Include(item => item.Modulo)
+                .ThenInclude(modulo => modulo!.Curso)
+            .Include(item => item.Questoes)
+                .ThenInclude(questao => questao.Alternativas)
+            .FirstOrDefaultAsync()
+            ?? throw new KeyNotFoundException("Avaliacao publicada nao encontrada.");
+
+        var matricula = await _context.Matriculas
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item =>
+                item.AlunoId == alunoId &&
+                item.Status == StatusMatricula.Aprovada &&
+                item.TurmaId.HasValue &&
+                item.TurmaId == avaliacao.TurmaId)
+            ?? throw new InvalidOperationException("Esta avaliacao nao esta liberada para a matricula do aluno.");
+
+        return (avaliacao, matricula);
+    }
+
     private async Task ValidarProfessorAsync(int professorId)
     {
         var existe = await _context.Professores.AsNoTracking().AnyAsync(professor => professor.Id == professorId);
         if (!existe)
         {
             throw new KeyNotFoundException("Professor nao encontrado.");
+        }
+    }
+
+    private async Task ValidarAlunoAsync(int alunoId)
+    {
+        var existe = await _context.Alunos.AsNoTracking().AnyAsync(aluno => aluno.Id == alunoId);
+        if (!existe)
+        {
+            throw new KeyNotFoundException("Aluno nao encontrado.");
         }
     }
 
@@ -411,5 +614,96 @@ public class AvaliacaoService : IAvaliacaoService
                 Ordem = alternativa.Ordem
             })
             .ToList();
+    }
+
+    private static void ValidarPeriodoAvaliacao(Avaliacao avaliacao)
+    {
+        var agora = DateTime.UtcNow;
+        if (avaliacao.DataAbertura.HasValue && avaliacao.DataAbertura.Value > agora)
+        {
+            throw new InvalidOperationException("Esta avaliacao ainda nao esta aberta para resposta.");
+        }
+
+        if (avaliacao.DataFechamento.HasValue && avaliacao.DataFechamento.Value < agora)
+        {
+            throw new InvalidOperationException("O periodo para responder esta avaliacao ja foi encerrado.");
+        }
+    }
+
+    private static AvaliacaoAlunoResponseDto MapAvaliacaoAluno(
+        Avaliacao avaliacao,
+        int matriculaId,
+        IReadOnlyList<TentativaAvaliacao> tentativas)
+    {
+        var ultimaTentativa = tentativas.OrderByDescending(tentativa => tentativa.NumeroTentativa).FirstOrDefault();
+        var tentativasRealizadas = tentativas.Count;
+
+        return new AvaliacaoAlunoResponseDto
+        {
+            Id = avaliacao.Id,
+            MatriculaId = matriculaId,
+            Titulo = avaliacao.Titulo,
+            Descricao = avaliacao.Descricao,
+            TurmaId = avaliacao.TurmaId,
+            TurmaNome = avaliacao.Turma?.NomeTurma ?? string.Empty,
+            CursoId = avaliacao.Modulo?.CursoId ?? avaliacao.Turma?.CursoId ?? 0,
+            CursoTitulo = avaliacao.Modulo?.Curso?.Titulo ?? string.Empty,
+            ModuloId = avaliacao.ModuloId,
+            ModuloTitulo = avaliacao.Modulo?.Titulo ?? string.Empty,
+            TipoAvaliacao = avaliacao.TipoAvaliacao,
+            StatusPublicacao = avaliacao.StatusPublicacao,
+            DataAbertura = avaliacao.DataAbertura,
+            DataFechamento = avaliacao.DataFechamento,
+            TentativasPermitidas = avaliacao.TentativasPermitidas,
+            TentativasRealizadas = tentativasRealizadas,
+            TentativasRestantes = Math.Max(avaliacao.TentativasPermitidas - tentativasRealizadas, 0),
+            TempoLimiteMinutos = avaliacao.TempoLimiteMinutos,
+            NotaMaxima = avaliacao.NotaMaxima,
+            TotalQuestoes = avaliacao.Questoes?.Count ?? 0,
+            UltimaNota = ultimaTentativa?.NotaBruta,
+            UltimoStatusTentativa = ultimaTentativa?.StatusTentativa,
+            PublicadoEm = avaliacao.PublicadoEm
+        };
+    }
+
+    private static QuestaoAvaliacaoAlunoResponseDto MapQuestaoAluno(QuestaoPublicada questao)
+    {
+        return new QuestaoAvaliacaoAlunoResponseDto
+        {
+            Id = questao.Id,
+            AvaliacaoId = questao.AvaliacaoId,
+            Ordem = questao.Ordem,
+            Contexto = questao.ContextoSnapshot,
+            Enunciado = questao.EnunciadoSnapshot,
+            TipoQuestao = questao.TipoQuestao,
+            Pontos = questao.Pontos,
+            Alternativas = questao.Alternativas
+                .OrderBy(alternativa => alternativa.Ordem)
+                .Select(alternativa => new AlternativaQuestaoAlunoResponseDto
+                {
+                    Id = alternativa.Id,
+                    Letra = alternativa.Letra,
+                    Texto = alternativa.Texto,
+                    Ordem = alternativa.Ordem
+                })
+                .ToList()
+        };
+    }
+
+    private static TentativaAvaliacaoAlunoResponseDto MapTentativaAluno(TentativaAvaliacao tentativa, Avaliacao avaliacao)
+    {
+        return new TentativaAvaliacaoAlunoResponseDto
+        {
+            Id = tentativa.Id,
+            AvaliacaoId = tentativa.AvaliacaoId,
+            MatriculaId = tentativa.MatriculaId,
+            NumeroTentativa = tentativa.NumeroTentativa,
+            StatusTentativa = tentativa.StatusTentativa,
+            NotaBruta = tentativa.NotaBruta,
+            NotaMaxima = avaliacao.NotaMaxima,
+            IniciadaEm = tentativa.IniciadaEm,
+            EnviadaEm = tentativa.EnviadaEm,
+            CorrigidaEm = tentativa.CorrigidaEm
+        };
     }
 }

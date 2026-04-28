@@ -42,6 +42,14 @@
   white-space: nowrap;
 }
 
+.workspace-globalbar__shortcuts {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--button-gap);
+  justify-content: center;
+}
+
 .workspace-globalbar__shortcut {
   align-items: center;
   background: rgba(123, 47, 247, 0.12);
@@ -58,6 +66,7 @@
   min-width: var(--button-min-width-nav);
   overflow-wrap: anywhere;
   padding: 0 var(--button-padding-x-nav);
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -79,6 +88,15 @@
   gap: var(--button-gap);
   justify-content: flex-end;
   min-width: 0;
+}
+
+@media (min-width: 901px) {
+  .workspace-globalbar__shortcuts {
+    left: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
 }
 
 .workspace-globalbar__identity {
@@ -688,6 +706,80 @@
 
 .student-content-card__link:hover {
   color: var(--brand-mint);
+}
+
+.student-evaluation-form {
+  display: grid;
+  gap: 18px;
+}
+
+.student-evaluation-question {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(185, 153, 255, 0.14);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.student-evaluation-question__header {
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.student-evaluation-question__header h3 {
+  color: var(--ink-strong);
+  font-size: 1.02rem;
+  line-height: 1.45;
+  margin: 10px 0 0;
+}
+
+.student-evaluation-question__context {
+  color: var(--ink-soft);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.student-evaluation-options {
+  display: grid;
+  gap: 10px;
+}
+
+.student-evaluation-option {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(185, 153, 255, 0.12);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  padding: 12px 14px;
+}
+
+.student-evaluation-option:has(input:checked) {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(134, 239, 172, 0.38);
+}
+
+.student-evaluation-option span {
+  align-items: center;
+  background: rgba(123, 47, 247, 0.16);
+  border: 1px solid rgba(185, 153, 255, 0.26);
+  border-radius: 999px;
+  color: var(--ink-strong);
+  display: inline-flex;
+  font-weight: 900;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.student-evaluation-option strong {
+  color: var(--ink-main);
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .student-course-note {
@@ -1464,6 +1556,11 @@
     width: 100%;
   }
 
+  .workspace-globalbar__shortcuts {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
   .profile-modal__hero {
     grid-template-columns: 1fr;
   }
@@ -1558,6 +1655,10 @@
   .student-content-card__actions {
     justify-content: flex-start;
     width: 100%;
+  }
+
+  .student-evaluation-question__header {
+    flex-direction: column;
   }
 
   .workspace-globalbar {

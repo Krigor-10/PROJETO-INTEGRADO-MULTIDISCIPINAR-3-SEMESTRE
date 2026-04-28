@@ -5,7 +5,7 @@ import { SecaoAvaliacoesProfessor } from "./workspace/SecaoAvaliacoesProfessor.j
 import { SecaoConteudosProfessor } from "./workspace/SecaoConteudosProfessor.jsx";
 import { SecaoCursos } from "./workspace/SecaoCursos.jsx";
 import { SecaoModulos } from "./workspace/SecaoModulos.jsx";
-import { SecaoConteudosAluno, SecaoCursosAluno } from "./workspace/SecoesAluno.jsx";
+import { SecaoAvaliacoesAluno, SecaoConteudosAluno, SecaoCursosAluno } from "./workspace/SecoesAluno.jsx";
 import { SecaoMatriculas } from "./workspace/SecaoMatriculas.jsx";
 import { SecaoProfessores } from "./workspace/SecaoProfessores.jsx";
 import { SecaoTurmas } from "./workspace/SecaoTurmas.jsx";
@@ -49,8 +49,8 @@ export default function WorkspaceScreen({
     [role]
   );
   const navSections = useMemo(
-    () => sections.filter((section) => section.showInSidebar !== false),
-    [sections]
+    () => sections.filter((section) => section.showInSidebar !== false && !(isStudent && section.key === "avaliacoes")),
+    [isStudent, sections]
   );
 
   const activeSection = sections.some((section) => section.key === route.section)
@@ -251,6 +251,7 @@ export default function WorkspaceScreen({
     return [
       { label: "Meus cursos", value: studentApprovedCourseCount, detail: "jornada ativa no momento" },
       { label: "Minhas matriculas", value: snapshot.matriculas.length, detail: "solicitacoes enviadas" },
+      { label: "Avaliacoes", value: snapshot.avaliacoes.length, detail: "publicadas para suas turmas" },
       {
         label: "Conteudos liberados",
         value: snapshot.conteudos.length,
@@ -266,6 +267,7 @@ export default function WorkspaceScreen({
     professorCursos.length,
     professorTurmas.length,
     snapshot.alunos.length,
+    snapshot.avaliacoes.length,
     snapshot.conteudos,
     snapshot.modulos.length,
     snapshot.matriculas.length,
@@ -422,13 +424,22 @@ export default function WorkspaceScreen({
           <strong>{sectionMeta.title}</strong>
         </div>
         {isStudent ? (
-          <RouteLink
-            className={`workspace-globalbar__shortcut${activeSection === "meus-cursos" ? " workspace-globalbar__shortcut--active" : ""}`}
-            onNavigate={onNavigate}
-            to="/app/meus-cursos"
-          >
-            Meus cursos
-          </RouteLink>
+          <div className="workspace-globalbar__shortcuts">
+            <RouteLink
+              className={`workspace-globalbar__shortcut${activeSection === "meus-cursos" ? " workspace-globalbar__shortcut--active" : ""}`}
+              onNavigate={onNavigate}
+              to="/app/meus-cursos"
+            >
+              Meus cursos
+            </RouteLink>
+            <RouteLink
+              className={`workspace-globalbar__shortcut${activeSection === "avaliacoes" ? " workspace-globalbar__shortcut--active" : ""}`}
+              onNavigate={onNavigate}
+              to="/app/avaliacoes"
+            >
+              {"REALIZAR AVALIA\u00c7\u00c3O"}
+            </RouteLink>
+          </div>
         ) : null}
         <div className="workspace-globalbar__session" aria-label="Resumo da sessao">
           <div className="workspace-globalbar__identity">
@@ -678,17 +689,25 @@ export default function WorkspaceScreen({
               )
             ) : null}
 
-            {activeSection === "avaliacoes" && isProfessor ? (
-              <SecaoAvaliacoesProfessor
-                avaliacoes={snapshot.avaliacoes}
-                cursos={snapshot.cursos}
-                modulos={snapshot.modulos}
-                onRefresh={() => setRefreshKey((current) => current + 1)}
-                onSessionExpired={onSessionExpired}
-                solicitacaoNovaAvaliacao={solicitacaoNovaAvaliacao}
-                turmas={snapshot.turmas}
-                usuario={usuario}
-              />
+            {activeSection === "avaliacoes" ? (
+              isProfessor ? (
+                <SecaoAvaliacoesProfessor
+                  avaliacoes={snapshot.avaliacoes}
+                  cursos={snapshot.cursos}
+                  modulos={snapshot.modulos}
+                  onRefresh={() => setRefreshKey((current) => current + 1)}
+                  onSessionExpired={onSessionExpired}
+                  solicitacaoNovaAvaliacao={solicitacaoNovaAvaliacao}
+                  turmas={snapshot.turmas}
+                  usuario={usuario}
+                />
+              ) : isStudent ? (
+                <SecaoAvaliacoesAluno
+                  avaliacoes={snapshot.avaliacoes}
+                  onRefresh={() => setRefreshKey((current) => current + 1)}
+                  onSessionExpired={onSessionExpired}
+                />
+              ) : null
             ) : null}
 
             {activeSection === "matriculas" ? (

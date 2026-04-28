@@ -33,6 +33,19 @@ public class AvaliacoesController : ControllerBase
         return Ok(avaliacoes.Select(MapResponse));
     }
 
+    [HttpGet("aluno/{alunoId:int}")]
+    [Authorize(Roles = "Aluno")]
+    public async Task<IActionResult> ListarAvaliacoesDoAluno(int alunoId)
+    {
+        if (!UsuarioAtualPodeAcessarAluno(alunoId))
+        {
+            return Forbid();
+        }
+
+        var avaliacoes = await _avaliacaoService.ListarAvaliacoesPorAlunoAsync(alunoId);
+        return Ok(avaliacoes);
+    }
+
     [HttpGet("{id:int}")]
     [Authorize(Roles = "Professor")]
     public async Task<IActionResult> ObterAvaliacaoPorId(int id)
@@ -113,6 +126,20 @@ public class AvaliacoesController : ControllerBase
         return Ok(questoes.Select(MapQuestaoResponse));
     }
 
+    [HttpGet("{id:int}/aluno/questoes")]
+    [Authorize(Roles = "Aluno")]
+    public async Task<IActionResult> ListarQuestoesDoAluno(int id)
+    {
+        var alunoId = ObterAlunoId();
+        if (!alunoId.HasValue)
+        {
+            return Unauthorized(new { mensagem = "Nao foi possivel identificar o aluno autenticado." });
+        }
+
+        var questoes = await _avaliacaoService.ListarQuestoesPorAlunoAsync(id, alunoId.Value);
+        return Ok(questoes);
+    }
+
     [HttpPost("{id:int}/questoes")]
     [Authorize(Roles = "Professor")]
     public async Task<IActionResult> AdicionarQuestao(int id, [FromBody] CriarQuestaoAvaliacaoDto dto)
@@ -146,10 +173,41 @@ public class AvaliacoesController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:int}/aluno/respostas")]
+    [Authorize(Roles = "Aluno")]
+    public async Task<IActionResult> EnviarRespostasDoAluno(int id, [FromBody] EnviarAvaliacaoAlunoDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var alunoId = ObterAlunoId();
+        if (!alunoId.HasValue)
+        {
+            return Unauthorized(new { mensagem = "Nao foi possivel identificar o aluno autenticado." });
+        }
+
+        var tentativa = await _avaliacaoService.EnviarRespostasAlunoAsync(id, alunoId.Value, dto);
+        return Ok(tentativa);
+    }
+
     private int? ObterProfessorId()
     {
         var rawId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("usuarioId");
         return int.TryParse(rawId, out var professorId) ? professorId : null;
+    }
+
+    private int? ObterAlunoId()
+    {
+        var rawId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("usuarioId");
+        return int.TryParse(rawId, out var alunoId) ? alunoId : null;
+    }
+
+    private bool UsuarioAtualPodeAcessarAluno(int alunoId)
+    {
+        var usuarioId = ObterAlunoId();
+        return usuarioId.HasValue && usuarioId.Value == alunoId;
     }
 
     private static AvaliacaoResponseDto MapResponse(Avaliacao avaliacao)

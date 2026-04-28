@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { DataTable, PanelCard, StatusPill } from "../../components/Primitives.jsx";
 import { maskCpf } from "../../lib/format.js";
 
@@ -14,6 +14,30 @@ export function SecaoAlunos({ alunos, matriculas = [] }) {
   const [buscaAluno, setBuscaAluno] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const termoBusca = useMemo(() => normalizarBusca(buscaAluno), [buscaAluno]);
+  const matriculaPrincipalPorAluno = useMemo(() => {
+    const matriculasPorAluno = new Map();
+
+    matriculas.forEach((matricula) => {
+      const alunoId = Number(matricula.alunoId);
+      const codigoRegistro = String(matricula.codigoRegistro || "").trim();
+
+      if (!alunoId || !codigoRegistro) {
+        return;
+      }
+
+      const matriculaAtual = matriculasPorAluno.get(alunoId);
+      const statusMatricula = Number(matricula.status);
+      const statusAtual = Number(matriculaAtual?.status);
+
+      if (!matriculaAtual || statusMatricula === 1 || statusAtual !== 1) {
+        matriculasPorAluno.set(alunoId, matricula);
+      }
+    });
+
+    return new Map(
+      [...matriculasPorAluno.entries()].map(([alunoId, matricula]) => [alunoId, matricula.codigoRegistro])
+    );
+  }, [matriculas]);
   const quantidadeCursosPorAluno = useMemo(() => {
     const cursosPorAluno = new Map();
 
@@ -34,6 +58,10 @@ export function SecaoAlunos({ alunos, matriculas = [] }) {
 
     return new Map([...cursosPorAluno.entries()].map(([alunoId, cursos]) => [alunoId, cursos.size]));
   }, [matriculas]);
+  const obterMatriculaAluno = useCallback(
+    (aluno) => aluno.matricula || matriculaPrincipalPorAluno.get(aluno.id) || "Sem matricula",
+    [matriculaPrincipalPorAluno]
+  );
   const alunosFiltrados = useMemo(() => {
     let proximosAlunos = alunos;
 
@@ -51,11 +79,19 @@ export function SecaoAlunos({ alunos, matriculas = [] }) {
       const cpfFormatado = maskCpf(aluno.cpf);
       const status = aluno.ativo ? "Ativo" : "Inativo";
       const quantidadeCursos = quantidadeCursosPorAluno.get(aluno.id) || 0;
-      const campos = [aluno.nome, aluno.email, aluno.cpf, cpfFormatado, aluno.matricula, String(quantidadeCursos), status];
+      const campos = [
+        aluno.nome,
+        aluno.email,
+        aluno.cpf,
+        cpfFormatado,
+        obterMatriculaAluno(aluno),
+        String(quantidadeCursos),
+        status
+      ];
 
       return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
     });
-  }, [alunos, filtroStatus, quantidadeCursosPorAluno, termoBusca]);
+  }, [alunos, filtroStatus, obterMatriculaAluno, quantidadeCursosPorAluno, termoBusca]);
   const temFiltroAtivo = Boolean(termoBusca || filtroStatus !== "todos");
 
   function limparFiltros() {
@@ -105,17 +141,17 @@ export function SecaoAlunos({ alunos, matriculas = [] }) {
       </div>
       <DataTable
         columns={[
-          { key: "nome", label: "Nome" },
-          { key: "email", label: "E-mail" },
-          { key: "matricula", label: "Matricula" },
+          { key: "matricula", label: "MATRICULA", render: obterMatriculaAluno },
+          { key: "nome", label: "NOME" },
+          { key: "email", label: "EMAIL" },
           {
             key: "cursosCadastrados",
-            label: "Cursos cadastrados",
+            label: "CURSOS CADASTRADOS",
             render: (aluno) => quantidadeCursosPorAluno.get(aluno.id) || 0
           },
           {
             key: "ativo",
-            label: "Status",
+            label: "STATUS",
             render: (aluno) => (
               <StatusPill tone={aluno.ativo ? "success" : "danger"}>{aluno.ativo ? "Ativo" : "Inativo"}</StatusPill>
             )

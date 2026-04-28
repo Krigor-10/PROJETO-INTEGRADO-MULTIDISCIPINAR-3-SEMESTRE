@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DataTable, EmptyState, InlineMessage, PanelCard, RouteLink, StatusPill } from "../../components/Primitives.jsx";
 import { ApiError, apiRequest } from "../../lib/api.js";
 import { mapById } from "../../lib/dashboard.js";
@@ -114,6 +114,393 @@ export function SecaoCursosAluno({ conteudos, cursos, matriculas, onNavigate, pr
           rows={linhasMatriculasAprovadas}
         />
       </PanelCard>
+    </div>
+  );
+}
+
+export function SecaoAvaliacoesAluno({ avaliacoes, onRefresh, onSessionExpired }) {
+  const [avaliacaoEmExecucao, setAvaliacaoEmExecucao] = useState(null);
+  const [questoes, setQuestoes] = useState([]);
+  const [respostas, setRespostas] = useState({});
+  const [carregandoQuestoes, setCarregandoQuestoes] = useState(false);
+  const [enviandoRespostas, setEnviandoRespostas] = useState(false);
+  const [mensagem, setMensagem] = useState({ tone: "", message: "" });
+
+  const avaliacoesOrdenadas = useMemo(
+    () =>
+      [...avaliacoes].sort((avaliacaoA, avaliacaoB) => {
+        const cursoA = avaliacaoA.cursoTitulo || "";
+        const cursoB = avaliacaoB.cursoTitulo || "";
+        const comparacaoCurso = cursoA.localeCompare(cursoB, "pt-BR");
+
+        if (comparacaoCurso !== 0) {
+          return comparacaoCurso;
+        }
+
+        const aberturaA = new Date(avaliacaoA.dataAbertura || avaliacaoA.publicadoEm || 0).getTime();
+        const aberturaB = new Date(avaliacaoB.dataAbertura || avaliacaoB.publicadoEm || 0).getTime();
+        return aberturaA - aberturaB;
+      }),
+    [avaliacoes]
+  );
+
+  const resumoAvaliacoes = useMemo(() => {
+    const disponiveis = avaliacoesOrdenadas.filter((avaliacao) => obterDisponibilidadeAvaliacao(avaliacao).podeRealizar);
+    const concluidas = avaliacoesOrdenadas.filter((avaliacao) => avaliacao.tentativasRealizadas > 0);
+
+    return [
+      `${avaliacoesOrdenadas.length} avaliacao(oes) publicada(s)`,
+      `${disponiveis.length} disponivel(is) agora`,
+      `${concluidas.length} com tentativa registrada`
+    ];
+  }, [avaliacoesOrdenadas]);
+
+  useEffect(() => {
+    if (!avaliacaoEmExecucao) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape" && !enviandoRespostas) {
+        fecharExecucaoAvaliacao();
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [avaliacaoEmExecucao, enviandoRespostas]);
+
+  async function abrirExecucaoAvaliacao(avaliacao) {
+    const disponibilidade = obterDisponibilidadeAvaliacao(avaliacao);
+    if (!disponibilidade.podeRealizar) {
+      setMensagem({ tone: "warning", message: disponibilidade.mensagem });
+      return;
+    }
+
+    setAvaliacaoEmExecucao(avaliacao);
+    setQuestoes([]);
+    setRespostas({});
+    setMensagem({ tone: "", message: "" });
+    setCarregandoQuestoes(true);
+
+    try {
+      const proximasQuestoes = await apiRequest(`/Avaliacoes/${avaliacao.id}/aluno/questoes`);
+      setQuestoes(proximasQuestoes);
+      setRespostas(criarRespostasIniciais(proximasQuestoes));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        onSessionExpired?.();
+        return;
+      }
+
+      setMensagem({ tone: "error", message: err.message || "Nao foi possivel carregar as questoes agora." });
+    } finally {
+      setCarregandoQuestoes(false);
+    }
+  }
+
+  function fecharExecucaoAvaliacao() {
+    if (enviandoRespostas) {
+      return;
+    }
+
+    setAvaliacaoEmExecucao(null);
+    setQuestoes([]);
+    setRespostas({});
+    setMensagem({ tone: "", message: "" });
+  }
+
+  function atualizarAlternativa(questaoId, alternativaId) {
+    setRespostas((current) => ({
+      ...current,
+      [questaoId]: {
+        ...(current[questaoId] || { questaoId }),
+        alternativaId,
+        respostaTexto: ""
+      }
+    }));
+  }
+
+  function atualizarRespostaTexto(questaoId, respostaTexto) {
+    setRespostas((current) => ({
+      ...current,
+      [questaoId]: {
+        ...(current[questaoId] || { questaoId }),
+        alternativaId: null,
+        respostaTexto
+      }
+    }));
+  }
+
+  async function enviarRespostas(event) {
+    event.preventDefault();
+
+    if (!avaliacaoEmExecucao || !questoes.length) {
+      return;
+    }
+
+    const pendente = questoes.find((questao) => {
+      const resposta = respostas[questao.id];
+
+      if (Number(questao.tipoQuestao) === 3) {
+        return !String(resposta?.respostaTexto || "").trim();
+      }
+
+      return !resposta?.alternativaId;
+    });
+
+    if (pendente) {
+      setMensagem({ tone: "error", message: `Responda a questao ${pendente.ordem} antes de enviar.` });
+      return;
+    }
+
+    const payload = {
+      respostas: questoes.map((questao) => {
+        const resposta = respostas[questao.id];
+
+        return {
+          questaoId: questao.id,
+          alternativaId: resposta?.alternativaId || null,
+          respostaTexto: String(resposta?.respostaTexto || "").trim()
+        };
+      })
+    };
+
+    setEnviandoRespostas(true);
+    setMensagem({ tone: "", message: "" });
+
+    try {
+      const tentativa = await apiRequest(`/Avaliacoes/${avaliacaoEmExecucao.id}/aluno/respostas`, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      const nota =
+        Number(tentativa.statusTentativa) === 3
+          ? ` Nota: ${formatScore(tentativa.notaBruta)} de ${formatScore(tentativa.notaMaxima)}.`
+          : " Respostas discursivas aguardam correcao do professor.";
+
+      setMensagem({ tone: "success", message: `Avaliacao enviada com sucesso.${nota}` });
+      onRefresh?.();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        onSessionExpired?.();
+        return;
+      }
+
+      setMensagem({ tone: "error", message: err.message || "Nao foi possivel enviar a avaliacao agora." });
+    } finally {
+      setEnviandoRespostas(false);
+    }
+  }
+
+  return (
+    <div className="content-section content-section--student">
+      <section className="content-section__intro">
+        <div className="content-section__intro-copy">
+          <span className="eyebrow">Avaliacoes do aluno</span>
+          <h2>Avaliacoes publicadas pelos professores</h2>
+          <p>Responda provas, quizzes e exercicios liberados para as turmas em que sua matricula esta aprovada.</p>
+        </div>
+        <div className="content-section__highlights" aria-label="Resumo de avaliacoes do aluno">
+          {resumoAvaliacoes.map((item) => (
+            <span className="chip" key={item}>
+              {item}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {!avaliacaoEmExecucao && mensagem.message ? <InlineMessage tone={mensagem.tone}>{mensagem.message}</InlineMessage> : null}
+
+      <PanelCard
+        description="Somente avaliacoes publicadas para as suas turmas aprovadas aparecem nesta lista."
+        title="Realizar avaliacao"
+      >
+        <DataTable
+          columns={[
+            {
+              key: "titulo",
+              label: "Avaliacao",
+              render: (row) => (
+                <div className="table-cell-stack">
+                  <strong>{row.titulo}</strong>
+                  <p>{compactText(row.descricao || "-", 88)}</p>
+                </div>
+              )
+            },
+            {
+              key: "turma",
+              label: "Turma",
+              render: (row) => (
+                <div className="table-cell-stack">
+                  <strong>{row.turmaNome || `Turma #${row.turmaId}`}</strong>
+                  <p>{row.cursoTitulo || `Curso #${row.cursoId}`}</p>
+                </div>
+              )
+            },
+            { key: "moduloTitulo", label: "Modulo" },
+            {
+              key: "tipoAvaliacao",
+              label: "Tipo",
+              render: (row) => <span className="chip">{normalizeEvaluationType(row.tipoAvaliacao)}</span>
+            },
+            {
+              key: "periodo",
+              label: "Periodo",
+              render: (row) => (
+                <div className="table-cell-stack">
+                  <strong>{row.dataAbertura ? formatDate(row.dataAbertura) : "Aberta"}</strong>
+                  <p>{row.dataFechamento ? `Fecha em ${formatDate(row.dataFechamento)}` : "Sem fechamento"}</p>
+                </div>
+              )
+            },
+            {
+              key: "tentativas",
+              label: "Tentativas",
+              render: (row) => `${row.tentativasRealizadas || 0}/${row.tentativasPermitidas || 1}`
+            },
+            {
+              key: "status",
+              label: "Status",
+              render: (row) => {
+                const disponibilidade = obterDisponibilidadeAvaliacao(row);
+
+                return (
+                  <div className="table-cell-stack">
+                    <StatusPill tone={disponibilidade.tone}>{disponibilidade.label}</StatusPill>
+                    <p>{row.ultimaNota !== null && row.ultimaNota !== undefined ? `Ultima nota ${formatScore(row.ultimaNota)}` : `${row.totalQuestoes || 0} questao(oes)`}</p>
+                  </div>
+                );
+              }
+            },
+            {
+              key: "acoes",
+              label: "Acao",
+              render: (row) => {
+                const disponibilidade = obterDisponibilidadeAvaliacao(row);
+
+                return (
+                  <button
+                    className="table-action"
+                    disabled={!disponibilidade.podeRealizar || carregandoQuestoes || enviandoRespostas}
+                    onClick={() => abrirExecucaoAvaliacao(row)}
+                    type="button"
+                  >
+                    Realizar avaliacao
+                  </button>
+                );
+              }
+            }
+          ]}
+          emptyMessage="Quando um professor publicar uma avaliacao para sua turma, ela aparecera aqui."
+          rows={avaliacoesOrdenadas}
+        />
+      </PanelCard>
+
+      {avaliacaoEmExecucao ? (
+        <div
+          className="content-form-modal"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              fecharExecucaoAvaliacao();
+            }
+          }}
+        >
+          <div
+            aria-label="Realizar avaliacao"
+            aria-modal="true"
+            className="content-form-modal__card"
+            role="dialog"
+          >
+            <button
+              className="content-form-modal__close"
+              disabled={enviandoRespostas}
+              onClick={fecharExecucaoAvaliacao}
+              type="button"
+            >
+              Fechar
+            </button>
+            <PanelCard
+              description={`${avaliacaoEmExecucao.cursoTitulo || "Curso"} - ${avaliacaoEmExecucao.turmaNome || "Turma"}`}
+              title={avaliacaoEmExecucao.titulo}
+            >
+              {mensagem.message ? <InlineMessage tone={mensagem.tone}>{mensagem.message}</InlineMessage> : null}
+
+              {carregandoQuestoes ? (
+                <EmptyState message="Carregando questoes da avaliacao." />
+              ) : (
+                <form className="student-evaluation-form" onSubmit={enviarRespostas}>
+                  {questoes.map((questao) => (
+                    <article className="student-evaluation-question" key={questao.id}>
+                      <div className="student-evaluation-question__header">
+                        <div>
+                          <div className="table-badge-list">
+                            <span className="chip">Questao {questao.ordem}</span>
+                            <span className="chip">{normalizeQuestionType(questao.tipoQuestao)}</span>
+                            <span className="chip">{formatScore(questao.pontos)} ponto(s)</span>
+                          </div>
+                          <h3>{questao.enunciado}</h3>
+                        </div>
+                      </div>
+
+                      {questao.contexto ? <p className="student-evaluation-question__context">{questao.contexto}</p> : null}
+
+                      {Number(questao.tipoQuestao) === 3 ? (
+                        <label className="management-field management-field--wide">
+                          <span>Resposta</span>
+                          <textarea
+                            disabled={enviandoRespostas}
+                            onChange={(event) => atualizarRespostaTexto(questao.id, event.target.value)}
+                            placeholder="Digite sua resposta."
+                            value={respostas[questao.id]?.respostaTexto || ""}
+                          />
+                        </label>
+                      ) : (
+                        <div className="student-evaluation-options">
+                          {questao.alternativas.map((alternativa) => (
+                            <label className="student-evaluation-option" key={alternativa.id}>
+                              <input
+                                checked={respostas[questao.id]?.alternativaId === alternativa.id}
+                                disabled={enviandoRespostas}
+                                name={`questao-${questao.id}`}
+                                onChange={() => atualizarAlternativa(questao.id, alternativa.id)}
+                                type="radio"
+                              />
+                              <span>{alternativa.letra}</span>
+                              <strong>{alternativa.texto}</strong>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+                  ))}
+
+                  <div className="management-form__actions">
+                    <button className="solid-button" disabled={enviandoRespostas || carregandoQuestoes} type="submit">
+                      {enviandoRespostas ? "Enviando..." : "Enviar avaliacao"}
+                    </button>
+                    <button
+                      className="button button--secondary exit-button"
+                      disabled={enviandoRespostas}
+                      onClick={fecharExecucaoAvaliacao}
+                      type="button"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </form>
+              )}
+            </PanelCard>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -447,6 +834,100 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
       </PanelCard>
     </div>
   );
+}
+
+function normalizeEvaluationType(type) {
+  const labels = {
+    1: "Quiz",
+    2: "Prova",
+    3: "Exercicio"
+  };
+
+  if (typeof type === "number") {
+    return labels[type] || "Avaliacao";
+  }
+
+  return type || "Avaliacao";
+}
+
+function normalizeQuestionType(type) {
+  const labels = {
+    1: "Multipla escolha",
+    2: "Verdadeiro/Falso",
+    3: "Discursiva"
+  };
+
+  if (typeof type === "number") {
+    return labels[type] || "Questao";
+  }
+
+  return type || "Questao";
+}
+
+function criarRespostasIniciais(questoes) {
+  return Object.fromEntries(
+    questoes.map((questao) => [
+      questao.id,
+      {
+        questaoId: questao.id,
+        alternativaId: null,
+        respostaTexto: ""
+      }
+    ])
+  );
+}
+
+function formatScore(value) {
+  return Number(value || 0).toFixed(1).replace(".", ",");
+}
+
+function obterDisponibilidadeAvaliacao(avaliacao) {
+  const agora = new Date();
+  const abertura = avaliacao.dataAbertura ? new Date(avaliacao.dataAbertura) : null;
+  const fechamento = avaliacao.dataFechamento ? new Date(avaliacao.dataFechamento) : null;
+
+  if (!avaliacao.totalQuestoes) {
+    return {
+      podeRealizar: false,
+      label: "Sem questoes",
+      mensagem: "Esta avaliacao ainda nao possui questoes publicadas.",
+      tone: "warning"
+    };
+  }
+
+  if (Number(avaliacao.tentativasRestantes || 0) <= 0) {
+    return {
+      podeRealizar: false,
+      label: "Concluida",
+      mensagem: "Voce ja usou todas as tentativas desta avaliacao.",
+      tone: "success"
+    };
+  }
+
+  if (abertura && abertura > agora) {
+    return {
+      podeRealizar: false,
+      label: "Agendada",
+      mensagem: `Esta avaliacao abre em ${formatDate(avaliacao.dataAbertura)}.`,
+      tone: "warning"
+    };
+  }
+
+  if (fechamento && fechamento < agora) {
+    return {
+      podeRealizar: false,
+      label: "Encerrada",
+      mensagem: "O periodo para responder esta avaliacao ja foi encerrado.",
+      tone: "danger"
+    };
+  }
+
+  return {
+    podeRealizar: true,
+    label: "Disponivel",
+    mensagem: "Avaliacao disponivel para resposta.",
+    tone: "success"
+  };
 }
 
 function calcularMediaProgresso(progressosCursos) {

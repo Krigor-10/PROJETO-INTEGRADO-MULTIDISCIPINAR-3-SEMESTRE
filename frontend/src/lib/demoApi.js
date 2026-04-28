@@ -84,6 +84,8 @@ export async function demoRequest(endpoint, options = {}) {
       return listTeacherEvaluations();
     case path === "/Avaliacoes" && method === "POST":
       return createEvaluation(payload);
+    case /^\/Avaliacoes\/aluno\/\d+$/.test(path) && method === "GET":
+      return listStudentEvaluations(getNumericId(path));
     case /^\/Avaliacoes\/\d+$/.test(path) && method === "PUT":
       return updateEvaluation(getNumericId(path), payload);
     case /^\/Avaliacoes\/\d+$/.test(path) && method === "DELETE":
@@ -94,6 +96,10 @@ export async function demoRequest(endpoint, options = {}) {
       return createEvaluationQuestion(getEvaluationQuestionsActionId(path), payload);
     case /^\/Avaliacoes\/\d+\/questoes\/\d+$/.test(path) && method === "DELETE":
       return deleteEvaluationQuestion(...getEvaluationQuestionActionIds(path));
+    case /^\/Avaliacoes\/\d+\/aluno\/questoes$/.test(path) && method === "GET":
+      return listStudentEvaluationQuestions(getStudentEvaluationActionId(path, "questoes"));
+    case /^\/Avaliacoes\/\d+\/aluno\/respostas$/.test(path) && method === "POST":
+      return submitStudentEvaluation(getStudentEvaluationActionId(path, "respostas"), payload);
     case /^\/Progressos\/aluno\/\d+$/.test(path) && method === "GET":
       return listStudentProgress(getNumericId(path));
     case /^\/Progressos\/conteudos\/\d+\/concluir$/.test(path) && method === "PUT":
@@ -649,6 +655,155 @@ function listStudentContents(studentId) {
       (conteudo) => approvedTurmaIds.has(conteudo.turmaId) && Number(conteudo.statusPublicacao) === 2
     )
   );
+}
+
+function listStudentEvaluations(studentId) {
+  const user = requireAuthenticatedUser();
+
+  if (!MANAGER_ROLES.has(user.tipoUsuario) && user.id !== studentId) {
+    throw new DemoApiError("Voce nao pode visualizar avaliacoes demo de outro usuario.", 403);
+  }
+
+  const db = readDemoDb();
+  ensureEvaluationCollections(db);
+  ensureQuestionCollections(db);
+  ensureAttemptCollections(db);
+
+  const approvedEnrollments = db.matriculas.filter(
+    (matricula) => matricula.alunoId === studentId && Number(matricula.status) === 1 && matricula.turmaId
+  );
+  const approvedTurmaIds = new Set(approvedEnrollments.map((matricula) => matricula.turmaId));
+  const enrollmentByTurmaId = new Map(approvedEnrollments.map((matricula) => [matricula.turmaId, matricula]));
+
+  return hydrateEvaluations(
+    db,
+    db.avaliacoes.filter(
+      (avaliacao) => approvedTurmaIds.has(avaliacao.turmaId) && Number(avaliacao.statusPublicacao) === 2
+    )
+  ).map((avaliacao) => {
+    const matricula = enrollmentByTurmaId.get(avaliacao.turmaId);
+    const tentativas = db.tentativasAvaliacao.filter(
+      (tentativa) => tentativa.avaliacaoId === avaliacao.id && tentativa.matriculaId === matricula?.id
+    );
+    const ultimaTentativa = [...tentativas].sort((left, right) => Number(right.numeroTentativa || 0) - Number(left.numeroTentativa || 0))[0] || null;
+
+    return {
+      ...avaliacao,
+      matriculaId: matricula?.id || 0,
+      tentativasRealizadas: tentativas.length,
+      tentativasRestantes: Math.max(Number(avaliacao.tentativasPermitidas || 1) - tentativas.length, 0),
+      ultimaNota: ultimaTentativa?.notaBruta ?? null,
+      ultimoStatusTentativa: ultimaTentativa?.statusTentativa ?? null
+    };
+  });
+}
+
+function listStudentEvaluationQuestions(evaluationId) {
+  const user = requireRole("Aluno");
+  const db = readDemoDb();
+  ensureQuestionCollections(db);
+  ensureStudentCanAccessEvaluation(db, user.id, evaluationId);
+
+  return hydrateEvaluationQuestions(
+    db.questoesAvaliacao.filter((questao) => questao.avaliacaoId === evaluationId)
+  ).map(stripCorrectAnswersFromQuestion);
+}
+
+function submitStudentEvaluation(evaluationId, payload) {
+  const user = requireRole("Aluno");
+  const db = readDemoDb();
+  ensureQuestionCollections(db);
+  ensureAttemptCollections(db);
+  const { avaliacao, matricula } = ensureStudentCanAccessEvaluation(db, user.id, evaluationId);
+  validateDemoEvaluationPeriod(avaliacao);
+
+  const questoes = db.questoesAvaliacao
+    .filter((questao) => questao.avaliacaoId === evaluationId)
+    .sort((left, right) => Number(left.ordem || 0) - Number(right.ordem || 0));
+  if (!questoes.length) {
+    throw new DemoApiError("A avaliacao demo ainda nao possui questoes publicadas.", 400);
+  }
+
+  const respostas = Array.isArray(payload.respostas) ? payload.respostas : [];
+  const questaoIds = new Set(questoes.map((questao) => questao.id));
+  const respostaIds = new Set(respostas.map((resposta) => Number(resposta.questaoId)));
+  if (respostas.length !== questoes.length || respostaIds.size !== respostas.length || respostas.some((resposta) => !questaoIds.has(Number(resposta.questaoId)))) {
+    throw new DemoApiError("Responda exatamente uma vez cada questao demo.", 400);
+  }
+
+  const tentativas = db.tentativasAvaliacao.filter(
+    (tentativa) => tentativa.avaliacaoId === evaluationId && tentativa.matriculaId === matricula.id
+  );
+  if (tentativas.length >= Number(avaliacao.tentativasPermitidas || 1)) {
+    throw new DemoApiError("O limite de tentativas desta avaliacao demo ja foi atingido.", 400);
+  }
+
+  const respostasPorQuestao = new Map(respostas.map((resposta) => [Number(resposta.questaoId), resposta]));
+  let notaBruta = 0;
+  let possuiDiscursiva = false;
+  const now = new Date().toISOString();
+  const tentativaId = nextId(db.tentativasAvaliacao);
+
+  questoes.forEach((questao) => {
+    const resposta = respostasPorQuestao.get(questao.id);
+
+    if (Number(questao.tipoQuestao) === 3) {
+      const texto = String(resposta?.respostaTexto || "").trim();
+      if (!texto) {
+        throw new DemoApiError("Preencha a resposta discursiva demo antes de enviar.", 400);
+      }
+
+      possuiDiscursiva = true;
+      db.respostasAvaliacao.push({
+        id: nextId(db.respostasAvaliacao),
+        tentativaAvaliacaoId: tentativaId,
+        questaoPublicadaId: questao.id,
+        alternativaQuestaoPublicadaId: null,
+        respostaTexto: texto,
+        correta: null,
+        pontosObtidos: 0,
+        respondidaEm: now
+      });
+      return;
+    }
+
+    const alternativaId = Number(resposta?.alternativaId);
+    const alternativa = questao.alternativas.find((item) => item.id === alternativaId);
+    if (!alternativa) {
+      throw new DemoApiError("Selecione uma alternativa demo valida para cada questao objetiva.", 400);
+    }
+
+    const correta = Boolean(alternativa.ehCorreta);
+    const pontosObtidos = correta ? roundDemoNumber(questao.pontos) : 0;
+    notaBruta += pontosObtidos;
+    db.respostasAvaliacao.push({
+      id: nextId(db.respostasAvaliacao),
+      tentativaAvaliacaoId: tentativaId,
+      questaoPublicadaId: questao.id,
+      alternativaQuestaoPublicadaId: alternativa.id,
+      respostaTexto: alternativa.texto,
+      correta,
+      pontosObtidos,
+      respondidaEm: now
+    });
+  });
+
+  const tentativa = {
+    id: tentativaId,
+    avaliacaoId: evaluationId,
+    matriculaId: matricula.id,
+    numeroTentativa: tentativas.length + 1,
+    statusTentativa: possuiDiscursiva ? 2 : 3,
+    notaBruta: possuiDiscursiva ? 0 : roundDemoNumber(notaBruta),
+    notaMaxima: Number(avaliacao.notaMaxima || 10),
+    iniciadaEm: now,
+    enviadaEm: now,
+    corrigidaEm: possuiDiscursiva ? null : now
+  };
+
+  db.tentativasAvaliacao.push(tentativa);
+  saveDemoDb(db);
+  return clone(tentativa);
 }
 
 function listStudentProgress(studentId) {
@@ -1238,6 +1393,54 @@ function hydrateEvaluationQuestions(rows) {
   return clone(rows).sort((left, right) => Number(left.ordem || 0) - Number(right.ordem || 0));
 }
 
+function stripCorrectAnswersFromQuestion(questao) {
+  return {
+    ...questao,
+    alternativas: (questao.alternativas || []).map((alternativa) => ({
+      id: alternativa.id,
+      letra: alternativa.letra,
+      texto: alternativa.texto,
+      ordem: alternativa.ordem
+    }))
+  };
+}
+
+function ensureStudentCanAccessEvaluation(db, studentId, evaluationId) {
+  const avaliacao = db.avaliacoes.find(
+    (item) => item.id === evaluationId && Number(item.statusPublicacao) === 2
+  );
+  if (!avaliacao) {
+    throw new DemoApiError("Avaliacao demo publicada nao encontrada.", 404);
+  }
+
+  const matricula = db.matriculas.find(
+    (item) =>
+      item.alunoId === studentId &&
+      Number(item.status) === 1 &&
+      item.turmaId &&
+      item.turmaId === avaliacao.turmaId
+  );
+  if (!matricula) {
+    throw new DemoApiError("Esta avaliacao demo nao esta liberada para a matricula do aluno.", 403);
+  }
+
+  return { avaliacao, matricula };
+}
+
+function validateDemoEvaluationPeriod(avaliacao) {
+  const now = Date.now();
+  const abertura = avaliacao.dataAbertura ? new Date(avaliacao.dataAbertura).getTime() : null;
+  const fechamento = avaliacao.dataFechamento ? new Date(avaliacao.dataFechamento).getTime() : null;
+
+  if (abertura && abertura > now) {
+    throw new DemoApiError("Esta avaliacao demo ainda nao esta aberta para resposta.", 400);
+  }
+
+  if (fechamento && fechamento < now) {
+    throw new DemoApiError("O periodo para responder esta avaliacao demo ja foi encerrado.", 400);
+  }
+}
+
 function buildStudentProgressSnapshot(db, studentId) {
   ensureProgressCollections(db);
 
@@ -1388,6 +1591,99 @@ function ensureEvaluationCollections(db) {
 function ensureQuestionCollections(db) {
   db.questoesBanco ||= [];
   db.questoesAvaliacao ||= [];
+}
+
+function ensureAttemptCollections(db) {
+  db.tentativasAvaliacao ||= [];
+  db.respostasAvaliacao ||= [];
+}
+
+function ensurePresentationEvaluation(db) {
+  ensureEvaluationCollections(db);
+  ensureQuestionCollections(db);
+  ensureAttemptCollections(db);
+
+  const evaluationSeed = {
+    id: 701,
+    titulo: "Avaliacao de teste - apresentacao",
+    descricao: "Avaliacao publicada para demonstrar o fluxo do aluno no modo demo.",
+    professorAutorId: 301,
+    turmaId: 401,
+    moduloId: 11,
+    tipoAvaliacao: 1,
+    statusPublicacao: 2,
+    dataAbertura: "2026-04-20T12:00:00.000Z",
+    dataFechamento: null,
+    tentativasPermitidas: 5,
+    tempoLimiteMinutos: 30,
+    notaMaxima: 10,
+    pesoNota: 1,
+    pesoProgresso: 0.5,
+    totalQuestoes: 1,
+    criadoEm: "2026-04-18T10:00:00.000Z",
+    atualizadoEm: "2026-04-20T12:00:00.000Z",
+    publicadoEm: "2026-04-20T12:00:00.000Z"
+  };
+
+  let evaluation = db.avaliacoes.find((item) => item.id === evaluationSeed.id);
+  if (!evaluation) {
+    evaluation = { ...evaluationSeed };
+    db.avaliacoes.push(evaluation);
+  } else {
+    Object.assign(evaluation, evaluationSeed);
+  }
+
+  const presentationAttempts = db.tentativasAvaliacao.filter(
+    (tentativa) => tentativa.avaliacaoId === evaluation.id && tentativa.matriculaId === 501
+  );
+  evaluation.tentativasPermitidas = Math.max(5, presentationAttempts.length + 1);
+
+  const bankQuestionSeed = {
+    id: 801,
+    professorAutorId: 301,
+    tituloInterno: "Questao demo - apresentacao",
+    contexto: "Considere a primeira etapa de um projeto de logica aplicada.",
+    enunciado: "Qual acao ajuda a validar o entendimento inicial antes de avancar para codigo?",
+    tipoQuestao: 1,
+    tema: "Logica",
+    subtema: "Validacao",
+    dificuldade: 1,
+    explicacaoPosResposta: "Antes de codificar, definir criterios claros reduz retrabalho.",
+    ativa: true,
+    criadoEm: "2026-04-18T11:00:00.000Z"
+  };
+
+  const bankQuestion = db.questoesBanco.find((questao) => questao.id === bankQuestionSeed.id);
+  if (!bankQuestion) {
+    db.questoesBanco.push({ ...bankQuestionSeed });
+  } else {
+    Object.assign(bankQuestion, bankQuestionSeed);
+  }
+
+  const publishedQuestionSeed = {
+    id: 811,
+    avaliacaoId: evaluation.id,
+    questaoBancoId: bankQuestionSeed.id,
+    ordem: 1,
+    contexto: bankQuestionSeed.contexto,
+    enunciado: bankQuestionSeed.enunciado,
+    tipoQuestao: 1,
+    explicacao: bankQuestionSeed.explicacaoPosResposta,
+    pontos: 10,
+    alternativas: [
+      { id: 1, letra: "A", texto: "Definir os criterios de aceite do problema.", ehCorreta: true, justificativa: "", ordem: 1 },
+      { id: 2, letra: "B", texto: "Comecar pela interface sem revisar o objetivo.", ehCorreta: false, justificativa: "", ordem: 2 },
+      { id: 3, letra: "C", texto: "Ignorar os casos de erro para ganhar tempo.", ehCorreta: false, justificativa: "", ordem: 3 },
+      { id: 4, letra: "D", texto: "Trocar o escopo antes de conversar com a turma.", ehCorreta: false, justificativa: "", ordem: 4 }
+    ]
+  };
+
+  const publishedQuestion = db.questoesAvaliacao.find((questao) => questao.id === publishedQuestionSeed.id);
+  if (!publishedQuestion) {
+    db.questoesAvaliacao.push({ ...publishedQuestionSeed });
+  } else {
+    Object.assign(publishedQuestion, publishedQuestionSeed);
+  }
 }
 
 function ensureCoordinatorCollection(db) {
@@ -1563,6 +1859,16 @@ function requireAdmin() {
   return user;
 }
 
+function requireRole(role) {
+  const user = requireAuthenticatedUser();
+
+  if (user.tipoUsuario !== role) {
+    throw new DemoApiError(`Este recurso demo exige perfil ${role}.`, 403);
+  }
+
+  return user;
+}
+
 function requireProfessor() {
   const user = requireAuthenticatedUser();
 
@@ -1594,6 +1900,8 @@ function readDemoDb() {
         ensureCoordinatorCollection(parsed);
         ensureEvaluationCollections(parsed);
         ensureQuestionCollections(parsed);
+        ensureAttemptCollections(parsed);
+        ensurePresentationEvaluation(parsed);
         ensureRegistrationCodes(parsed);
         saveDemoDb(parsed);
         return parsed;
@@ -1606,6 +1914,8 @@ function readDemoDb() {
   const initialDb = createInitialDemoDb();
   ensureEvaluationCollections(initialDb);
   ensureQuestionCollections(initialDb);
+  ensureAttemptCollections(initialDb);
+  ensurePresentationEvaluation(initialDb);
   ensureRegistrationCodes(initialDb);
   saveDemoDb(initialDb);
   return initialDb;
@@ -1628,7 +1938,9 @@ function isValidDemoDb(db) {
       Array.isArray(db.conteudos) &&
       (db.avaliacoes === undefined || Array.isArray(db.avaliacoes)) &&
       (db.questoesBanco === undefined || Array.isArray(db.questoesBanco)) &&
-      (db.questoesAvaliacao === undefined || Array.isArray(db.questoesAvaliacao))
+      (db.questoesAvaliacao === undefined || Array.isArray(db.questoesAvaliacao)) &&
+      (db.tentativasAvaliacao === undefined || Array.isArray(db.tentativasAvaliacao)) &&
+      (db.respostasAvaliacao === undefined || Array.isArray(db.respostasAvaliacao))
   );
 }
 
@@ -1919,21 +2231,21 @@ function createInitialDemoDb() {
     avaliacoes: [
       {
         id: 701,
-        titulo: "Quiz diagnostico do modulo",
-        descricao: "Primeira avaliacao curta para medir entendimento dos fundamentos.",
+        titulo: "Avaliacao de teste - apresentacao",
+        descricao: "Avaliacao publicada para demonstrar o fluxo do aluno no modo demo.",
         professorAutorId: 301,
         turmaId: 401,
         moduloId: 11,
         tipoAvaliacao: 1,
         statusPublicacao: 2,
         dataAbertura: "2026-04-20T12:00:00.000Z",
-        dataFechamento: "2026-05-05T22:59:00.000Z",
-        tentativasPermitidas: 2,
+        dataFechamento: null,
+        tentativasPermitidas: 5,
         tempoLimiteMinutos: 30,
         notaMaxima: 10,
         pesoNota: 1,
         pesoProgresso: 0.5,
-        totalQuestoes: 0,
+        totalQuestoes: 1,
         criadoEm: "2026-04-18T10:00:00.000Z",
         atualizadoEm: "2026-04-20T12:00:00.000Z",
         publicadoEm: "2026-04-20T12:00:00.000Z"
@@ -1981,8 +2293,43 @@ function createInitialDemoDb() {
         publicadoEm: "2026-04-19T14:00:00.000Z"
       }
     ],
-    questoesBanco: [],
-    questoesAvaliacao: [],
+    questoesBanco: [
+      {
+        id: 801,
+        professorAutorId: 301,
+        tituloInterno: "Questao demo - apresentacao",
+        contexto: "Considere a primeira etapa de um projeto de logica aplicada.",
+        enunciado: "Qual acao ajuda a validar o entendimento inicial antes de avancar para codigo?",
+        tipoQuestao: 1,
+        tema: "Logica",
+        subtema: "Validacao",
+        dificuldade: 1,
+        explicacaoPosResposta: "Antes de codificar, definir criterios claros reduz retrabalho.",
+        ativa: true,
+        criadoEm: "2026-04-18T11:00:00.000Z"
+      }
+    ],
+    questoesAvaliacao: [
+      {
+        id: 811,
+        avaliacaoId: 701,
+        questaoBancoId: 801,
+        ordem: 1,
+        contexto: "Considere a primeira etapa de um projeto de logica aplicada.",
+        enunciado: "Qual acao ajuda a validar o entendimento inicial antes de avancar para codigo?",
+        tipoQuestao: 1,
+        explicacao: "Antes de codificar, definir criterios claros reduz retrabalho.",
+        pontos: 10,
+        alternativas: [
+          { id: 1, letra: "A", texto: "Definir os criterios de aceite do problema.", ehCorreta: true, justificativa: "", ordem: 1 },
+          { id: 2, letra: "B", texto: "Comecar pela interface sem revisar o objetivo.", ehCorreta: false, justificativa: "", ordem: 2 },
+          { id: 3, letra: "C", texto: "Ignorar os casos de erro para ganhar tempo.", ehCorreta: false, justificativa: "", ordem: 3 },
+          { id: 4, letra: "D", texto: "Trocar o escopo antes de conversar com a turma.", ehCorreta: false, justificativa: "", ordem: 4 }
+        ]
+      }
+    ],
+    tentativasAvaliacao: [],
+    respostasAvaliacao: [],
     progressos: {
       conteudos: [],
       modulos: [],
@@ -2087,6 +2434,17 @@ function getEvaluationQuestionActionIds(path) {
   }
 
   return [evaluationId, questionId];
+}
+
+function getStudentEvaluationActionId(path, action) {
+  const match = String(path).match(new RegExp(`^/Avaliacoes/(\\d+)/aluno/${action}$`));
+  const id = Number(match?.[1]);
+
+  if (!Number.isInteger(id)) {
+    throw new DemoApiError("Identificador demo invalido.", 400);
+  }
+
+  return id;
 }
 
 function clone(value) {

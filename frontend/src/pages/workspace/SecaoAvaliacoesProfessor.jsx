@@ -1490,14 +1490,6 @@ export function SecaoAvaliacoesProfessor({
           <div className="table-toolbar">
             <div className="table-actions">
               <button
-                className="solid-button"
-                disabled={salvandoAvaliacao}
-                onClick={abrirFormularioNovaAvaliacao}
-                type="button"
-              >
-                Criar avaliacao
-              </button>
-              <button
                 className="table-action"
                 disabled={salvandoAvaliacao || linhasAvaliacoesSelecionadas.length !== 1}
                 onClick={editarAvaliacaoSelecionada}
