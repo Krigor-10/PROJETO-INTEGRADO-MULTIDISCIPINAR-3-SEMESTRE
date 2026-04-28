@@ -6,6 +6,9 @@ namespace PlataformaEnsino.API.Models;
 
 public class Professor : Usuario
 {
+    [StringLength(16)]
+    public string CodigoRegistro { get; set; } = string.Empty;
+
     [Required]
     [StringLength(120)]
     public string Especialidade { get; set; } = string.Empty;

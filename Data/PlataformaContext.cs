@@ -94,6 +94,15 @@ public class PlataformaContext : DbContext
             .HasIndex(m => m.CodigoRegistro)
             .IsUnique();
 
+        modelBuilder.Entity<Professor>()
+            .Property(p => p.CodigoRegistro)
+            .HasMaxLength(16);
+
+        modelBuilder.Entity<Professor>()
+            .HasIndex(p => p.CodigoRegistro)
+            .IsUnique()
+            .HasFilter("[TipoUsuario] = N'Professor' AND [CodigoRegistro] IS NOT NULL");
+
         modelBuilder.Entity<Turma>()
             .HasIndex(t => new { t.NomeTurma, t.CursoId })
             .IsUnique();

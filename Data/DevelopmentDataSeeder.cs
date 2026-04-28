@@ -295,6 +295,7 @@ public static class DevelopmentDataSeeder
         professor.Cidade = "Sao Paulo";
         professor.Estado = "SP";
         professor.ConfigurarAcesso("Professor", BCrypt.Net.BCrypt.HashPassword(DefaultPassword));
+        await EnsureProfessorRegistrationCodeAsync(context, professor);
         professor.Especialidade = specialty;
 
         return professor;
@@ -489,6 +490,33 @@ public static class DevelopmentDataSeeder
         }
 
         throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o curso de teste.");
+    }
+
+    private static async Task EnsureProfessorRegistrationCodeAsync(PlataformaContext context, Professor professor)
+    {
+        if (!string.IsNullOrWhiteSpace(professor.CodigoRegistro))
+        {
+            return;
+        }
+
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarProfessor();
+            var emUsoLocal = context.Professores.Local.Any(item =>
+                !ReferenceEquals(item, professor) &&
+                item.CodigoRegistro == codigo);
+            var emUsoBanco = await context.Professores.AnyAsync(item =>
+                item.Id != professor.Id &&
+                item.CodigoRegistro == codigo);
+
+            if (!emUsoLocal && !emUsoBanco)
+            {
+                professor.CodigoRegistro = codigo;
+                return;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o professor de teste.");
     }
 
     private static async Task EnsureModuleRegistrationCodeAsync(PlataformaContext context, Modulo modulo)

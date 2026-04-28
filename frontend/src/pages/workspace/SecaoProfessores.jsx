@@ -83,7 +83,13 @@ export function SecaoProfessores({ cursos = [], onRefresh, onSessionExpired, pro
     return proximosProfessores.filter((professor) => {
       const cursosDoProfessor = [...(cursosPorProfessor.get(Number(professor.id)) || [])];
       const nomesCursos = cursosDoProfessor.map((cursoId) => cursoPorId.get(cursoId)?.titulo || `Curso #${cursoId}`);
-      const campos = [professor.nome, professor.email, String(cursosDoProfessor.length), ...nomesCursos];
+      const campos = [
+        professor.codigoRegistro,
+        professor.nome,
+        professor.email,
+        String(cursosDoProfessor.length),
+        ...nomesCursos
+      ];
 
       return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
     });
@@ -633,6 +639,7 @@ export function SecaoProfessores({ cursos = [], onRefresh, onSessionExpired, pro
 
       <DataTable
         columns={[
+          { key: "codigoRegistro", label: "MATRICULA", render: (professor) => professor.codigoRegistro || "Sem matricula" },
           { key: "nome", label: "Nome" },
           { key: "email", label: "E-mail" },
           {

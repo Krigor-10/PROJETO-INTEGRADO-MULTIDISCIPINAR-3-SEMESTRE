@@ -13,6 +13,8 @@ public static class CodigoRegistroGenerator
 
     public static string GerarMatricula() => Gerar("MAT");
 
+    public static string GerarProfessor() => Gerar("PROF");
+
     private static string Gerar(string prefixo)
     {
         Span<char> token = stackalloc char[CodeLength];

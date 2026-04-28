@@ -31,6 +31,11 @@ Base de retomada: `docs/progresso-2026-04-25.md`
 - Na aba administrativa `Alunos`, a tabela foi reorganizada para:
   `MATRICULA | NOME | EMAIL | CURSOS CADASTRADOS | STATUS`.
 - A coluna `MATRICULA` da aba `Alunos` usa fallback para o `codigoRegistro` das matriculas quando o cadastro do aluno nao traz a matricula diretamente.
+- `Professor` passou a ter `CodigoRegistro` publico persistido, com prefixo `PROF`, para nao expor o `Id` interno do banco na interface.
+- A aba administrativa `Professores` agora exibe a coluna `MATRICULA` usando o `CodigoRegistro` do professor.
+- O cadastro real de professor passou a gerar `CodigoRegistro` automaticamente.
+- O seed de desenvolvimento e o modo demo passaram a garantir `codigoRegistro` para professores existentes e novos.
+- Criada a migration `AdicionarCodigoRegistroProfessor`, preenchendo codigos para professores ja existentes antes de criar o indice unico filtrado.
 
 ## Validacao
 
@@ -43,9 +48,18 @@ Base de retomada: `docs/progresso-2026-04-25.md`
 - Frontend compilado com sucesso apos centralizar os atalhos da topbar do aluno e deixar o texto em maiusculas.
 - Frontend compilado com sucesso apos garantir a avaliacao demo de apresentacao.
 - Frontend compilado com sucesso apos reorganizar a tabela administrativa de `Alunos`.
+- Backend compilado com sucesso apos adicionar `CodigoRegistro` para professores:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- Frontend compilado com sucesso apos incluir `MATRICULA` na tabela administrativa de `Professores`.
+- Migration `AdicionarCodigoRegistroProfessor` aplicada no LocalDB com sucesso:
+  `dotnet ef database update --configuration Release --no-build`
+- Conferencia do EF confirmou ausencia de mudancas pendentes no modelo:
+  `dotnet ef migrations has-pending-model-changes --configuration Release --no-build`
 
 ## Proximos pontos sugeridos
 
 - Revisar visualmente no navegador o fluxo completo do aluno: `MEUS CURSOS`, `REALIZAR AVALIACAO`, abertura da avaliacao e envio de respostas.
 - Avaliar se as descricoes visuais em cards e secoes devem ser removidas ou escondidas em telas operacionais para reduzir poluicao da interface.
+- Analisar se o modo demo esta equivalente ao projeto real em funcionalidades e interatividade, mapeando diferencas entre `demoApi.js` e os endpoints/regras do backend.
+- No projeto real, criar feedbacks/confirmacoes para funcionalidades importantes como `Sair`, `Cancelar` e `Deslogar`, evitando acoes bruscas sem retorno claro para o usuario.
 - Continuar o item pendente de tornar a tabela `MEUS CURSOS` clicavel/expansivel para exibir os modulos do curso.

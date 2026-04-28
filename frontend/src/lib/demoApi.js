@@ -333,6 +333,7 @@ function createProfessor(payload) {
 
   const professor = {
     id: nextId(db.professores),
+    codigoRegistro: nextDemoRegistrationCode(db.professores, "PROF"),
     nome: String(payload.nome || "").trim(),
     email: normalizedEmail,
     cpf: normalizedCpf,
@@ -1726,6 +1727,7 @@ function ensureCoordinatorCollection(db) {
 function ensureRegistrationCodes(db) {
   ensureCollectionRegistrationCodes(db.cursos, "CUR");
   ensureCollectionRegistrationCodes(db.modulos, "MOD");
+  ensureCollectionRegistrationCodes(db.professores, "PROF");
   ensureCollectionRegistrationCodes(db.matriculas, "MAT");
 }
 
@@ -2067,6 +2069,7 @@ function createInitialDemoDb() {
     professores: [
       {
         id: 301,
+        codigoRegistro: "PROF-1U8L3B",
         nome: "Renata Vieira",
         email: "professor@demo.edtech",
         especialidade: "Arquitetura .NET e jornadas de conteudo",
@@ -2074,6 +2077,7 @@ function createInitialDemoDb() {
       },
       {
         id: 302,
+        codigoRegistro: "PROF-1UEO0U",
         nome: "Marcio Lima",
         email: "marcio@prof.demo",
         especialidade: "SQL aplicado e modelagem de dados",

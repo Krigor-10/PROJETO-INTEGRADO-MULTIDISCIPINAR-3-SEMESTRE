@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PlataformaEnsino.API.Common;
 using PlataformaEnsino.API.Data;
 using PlataformaEnsino.API.DTOs;
 using PlataformaEnsino.API.Models;
@@ -59,6 +60,7 @@ namespace PlataformaEnsino.API.Controllers
                 Bairro = dto.Bairro.Trim(),
                 Cidade = dto.Cidade.Trim(),
                 Estado = dto.Estado.Trim().ToUpper(),
+                CodigoRegistro = await GerarCodigoProfessorAsync(),
                 Especialidade = dto.Especialidade.Trim()
             };
             professor.ConfigurarAcesso("Professor", BCrypt.Net.BCrypt.HashPassword(dto.Senha), dto.Ativo);
@@ -69,11 +71,27 @@ namespace PlataformaEnsino.API.Controllers
             return Ok(MapResponse(professor));
         }
 
+        private async Task<string> GerarCodigoProfessorAsync()
+        {
+            for (var tentativa = 0; tentativa < 10; tentativa++)
+            {
+                var codigo = CodigoRegistroGenerator.GerarProfessor();
+
+                if (!await _context.Professores.AnyAsync(professor => professor.CodigoRegistro == codigo))
+                {
+                    return codigo;
+                }
+            }
+
+            throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o professor.");
+        }
+
         private static ProfessorResponseDto MapResponse(Professor professor)
         {
             return new ProfessorResponseDto
             {
                 Id = professor.Id,
+                CodigoRegistro = professor.CodigoRegistro,
                 Nome = professor.Nome,
                 Email = professor.Email,
                 Cpf = professor.Cpf,
