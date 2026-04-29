@@ -49,6 +49,9 @@ Base de retomada: `docs/progresso-2026-04-25.md`
 - Normalizados os feedbacks dos perfis com a nova entidade `FeedbackAcademico`, removendo as listas primitivas `Feedbacks` de `Aluno` e `Professor`.
 - Removida a lista primitiva `TurmasAtribuidas` de `Professor`; a relacao oficial de professor com turma permanece em `Turma.ProfessorId`.
 - Criada a migration `NormalizarFeedbackAcademico`, migrando os feedbacks antigos das colunas JSON antes de remover `Aluno_Feedbacks`, `Feedbacks` e `TurmasAtribuidas` da tabela `Usuarios`.
+- Iniciada a normalizacao maior de usuarios com mapeamento TPT: `Usuarios` ficou como tabela base e os perfis passaram para `Admins`, `Alunos`, `Coordenadores` e `Professores`.
+- Criada a migration `NormalizarPerfisUsuario`, copiando os dados especificos dos perfis antes de remover `Matricula`, `TurmaAtual`, `CursoResponsavel`, `CodigoRegistro` e `Especialidade` da tabela `Usuarios`.
+- A migration de perfis foi ajustada para remover FKs antigas de forma resiliente quando a constraint existir fisicamente no banco.
 
 ## Validacao
 
@@ -90,6 +93,17 @@ Base de retomada: `docs/progresso-2026-04-25.md`
   `dotnet ef migrations has-pending-model-changes --configuration Release --no-build`
 - Migration `NormalizarFeedbackAcademico` aplicada no LocalDB com sucesso:
   `dotnet ef database update --configuration Release --no-build`
+- Backend compilado com sucesso apos mapear os perfis de usuario em TPT:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- Conferencia do EF confirmou ausencia de mudancas pendentes no modelo apos normalizar perfis:
+  `dotnet ef migrations has-pending-model-changes --configuration Release --no-build`
+- Migration `NormalizarPerfisUsuario` aplicada no LocalDB com sucesso:
+  `dotnet ef database update --configuration Release --no-build`
+- Conferencia de dados no LocalDB confirmou paridade entre `Usuarios.TipoUsuario` e tabelas de perfil:
+  `Admins=1`, `Alunos=22`, `Coordenadores=6`, `Professores=7`.
+- Smoke test real da API em `http://127.0.0.1:5012` validou login e endpoints principais apos TPT:
+  `admin@edtech.local`, `professor@edtech.local` e `aluno@edtech.local` autenticaram com sucesso.
+- O smoke test confirmou respostas para `Cursos`, `Turmas`, `Alunos`, `Professores`, `Coordenadores`, `Turmas/minhas`, `Cursos/meus` e `Alunos/teste-jwt`.
 
 ## Proximos pontos sugeridos
 
@@ -98,4 +112,4 @@ Base de retomada: `docs/progresso-2026-04-25.md`
 - Analisar se o modo demo esta equivalente ao projeto real em funcionalidades e interatividade, mapeando diferencas entre `demoApi.js` e os endpoints/regras do backend.
 - No projeto real, criar feedbacks/confirmacoes para funcionalidades importantes como `Sair`, `Cancelar` e `Deslogar`, evitando acoes bruscas sem retorno claro para o usuario.
 - Continuar o item pendente de tornar a tabela `MEUS CURSOS` clicavel/expansivel para exibir os modulos do curso.
-- Continuar a organizacao estrutural planejando a normalizacao maior de `Usuarios` em tabelas de perfil (`Alunos`, `Professores`, `Coordenadores`, `Admins`) quando o fluxo atual estiver fechado.
+- Proximo passo estrutural: normalizar endereco de `Usuario` em tabela propria, depois de uma validacao visual rapida do login e das telas principais com o mapeamento TPT.

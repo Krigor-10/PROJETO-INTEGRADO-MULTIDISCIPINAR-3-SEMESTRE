@@ -9,11 +9,20 @@ public sealed class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
     public void Configure(EntityTypeBuilder<Usuario> builder)
     {
         builder
-            .HasDiscriminator<string>("TipoUsuario")
-            .HasValue<Aluno>("Aluno")
-            .HasValue<Professor>("Professor")
-            .HasValue<Coordenador>("Coordenador")
-            .HasValue<Admin>("Admin");
+            .ToTable("Usuarios");
+
+        builder
+            .Property(u => u.TipoUsuario)
+            .HasMaxLength(40)
+            .IsRequired();
+    }
+}
+
+public sealed class AlunoConfiguration : IEntityTypeConfiguration<Aluno>
+{
+    public void Configure(EntityTypeBuilder<Aluno> builder)
+    {
+        builder.ToTable("Alunos");
     }
 }
 
@@ -21,14 +30,32 @@ public sealed class ProfessorConfiguration : IEntityTypeConfiguration<Professor>
 {
     public void Configure(EntityTypeBuilder<Professor> builder)
     {
+        builder.ToTable("Professores");
+
         builder
             .Property(p => p.CodigoRegistro)
-            .HasMaxLength(16);
+            .HasMaxLength(16)
+            .IsRequired();
 
         builder
             .HasIndex(p => p.CodigoRegistro)
-            .IsUnique()
-            .HasFilter("[TipoUsuario] = N'Professor' AND [CodigoRegistro] IS NOT NULL");
+            .IsUnique();
+    }
+}
+
+public sealed class CoordenadorConfiguration : IEntityTypeConfiguration<Coordenador>
+{
+    public void Configure(EntityTypeBuilder<Coordenador> builder)
+    {
+        builder.ToTable("Coordenadores");
+    }
+}
+
+public sealed class AdminConfiguration : IEntityTypeConfiguration<Admin>
+{
+    public void Configure(EntityTypeBuilder<Admin> builder)
+    {
+        builder.ToTable("Admins");
     }
 }
 
