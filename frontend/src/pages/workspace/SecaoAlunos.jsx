@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DataTable, PanelCard, StatusPill } from "../../components/Primitives.jsx";
 import { maskCpf } from "../../lib/format.js";
+import { mapById } from "../../lib/dashboard.js";
 
 function normalizarBusca(valor) {
   return String(valor ?? "")
@@ -10,10 +11,12 @@ function normalizarBusca(valor) {
     .trim();
 }
 
-export function SecaoAlunos({ alunos, matriculas = [] }) {
+export function SecaoAlunos({ alunos, cursos = [], matriculas = [] }) {
   const [buscaAluno, setBuscaAluno] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [alunoCursosSelecionado, setAlunoCursosSelecionado] = useState(null);
   const termoBusca = useMemo(() => normalizarBusca(buscaAluno), [buscaAluno]);
+  const cursoPorId = useMemo(() => mapById(cursos), [cursos]);
   const matriculaPrincipalPorAluno = useMemo(() => {
     const matriculasPorAluno = new Map();
 
@@ -38,8 +41,8 @@ export function SecaoAlunos({ alunos, matriculas = [] }) {
       [...matriculasPorAluno.entries()].map(([alunoId, matricula]) => [alunoId, matricula.codigoRegistro])
     );
   }, [matriculas]);
-  const quantidadeCursosPorAluno = useMemo(() => {
-    const cursosPorAluno = new Map();
+  const cursosPorAluno = useMemo(() => {
+    const cursosMapeados = new Map();
 
     matriculas.forEach((matricula) => {
       const alunoId = Number(matricula.alunoId);
@@ -49,15 +52,24 @@ export function SecaoAlunos({ alunos, matriculas = [] }) {
         return;
       }
 
-      if (!cursosPorAluno.has(alunoId)) {
-        cursosPorAluno.set(alunoId, new Set());
+      if (!cursosMapeados.has(alunoId)) {
+        cursosMapeados.set(alunoId, new Map());
       }
 
-      cursosPorAluno.get(alunoId).add(cursoId);
+      const curso = cursoPorId.get(cursoId);
+      cursosMapeados.get(alunoId).set(cursoId, {
+        id: cursoId,
+        titulo: curso?.titulo || curso?.nome || `Curso #${cursoId}`
+      });
     });
 
-    return new Map([...cursosPorAluno.entries()].map(([alunoId, cursos]) => [alunoId, cursos.size]));
-  }, [matriculas]);
+    return new Map(
+      [...cursosMapeados.entries()].map(([alunoId, cursosAluno]) => [
+        alunoId,
+        [...cursosAluno.values()].sort((left, right) => left.titulo.localeCompare(right.titulo, "pt-BR"))
+      ])
+    );
+  }, [cursoPorId, matriculas]);
   const obterMatriculaAluno = useCallback(
     (aluno) => aluno.matricula || matriculaPrincipalPorAluno.get(aluno.id) || "Sem matricula",
     [matriculaPrincipalPorAluno]
@@ -78,29 +90,136 @@ export function SecaoAlunos({ alunos, matriculas = [] }) {
     return proximosAlunos.filter((aluno) => {
       const cpfFormatado = maskCpf(aluno.cpf);
       const status = aluno.ativo ? "Ativo" : "Inativo";
-      const quantidadeCursos = quantidadeCursosPorAluno.get(aluno.id) || 0;
+      const cursosDoAluno = cursosPorAluno.get(aluno.id) || [];
       const campos = [
         aluno.nome,
         aluno.email,
         aluno.cpf,
         cpfFormatado,
         obterMatriculaAluno(aluno),
-        String(quantidadeCursos),
+        String(cursosDoAluno.length),
+        ...cursosDoAluno.map((curso) => curso.titulo),
         status
       ];
 
       return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
     });
-  }, [alunos, filtroStatus, obterMatriculaAluno, quantidadeCursosPorAluno, termoBusca]);
+  }, [alunos, cursosPorAluno, filtroStatus, obterMatriculaAluno, termoBusca]);
   const temFiltroAtivo = Boolean(termoBusca || filtroStatus !== "todos");
+
+  useEffect(() => {
+    if (!alunoCursosSelecionado) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setAlunoCursosSelecionado(null);
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [alunoCursosSelecionado]);
 
   function limparFiltros() {
     setBuscaAluno("");
     setFiltroStatus("todos");
   }
 
+  function obterCursosDoAluno(aluno) {
+    return cursosPorAluno.get(Number(aluno.id)) || [];
+  }
+
+  function abrirCursosAluno(aluno) {
+    const cursosDoAluno = obterCursosDoAluno(aluno);
+
+    if (cursosDoAluno.length <= 1) {
+      return;
+    }
+
+    setAlunoCursosSelecionado({
+      aluno,
+      cursos: cursosDoAluno
+    });
+  }
+
+  function fecharCursosAluno() {
+    setAlunoCursosSelecionado(null);
+  }
+
+  function renderCursosAluno(aluno) {
+    const cursosDoAluno = obterCursosDoAluno(aluno);
+
+    if (!cursosDoAluno.length) {
+      return <span className="table-muted">Nenhum curso</span>;
+    }
+
+    return (
+      <div className="course-preview-cell">
+        <span className="course-preview-cell__name">{cursosDoAluno[0].titulo}</span>
+        {cursosDoAluno.length > 1 ? (
+          <button
+            aria-label={`Ver todos os cursos de ${aluno.nome}`}
+            className="course-preview-cell__more"
+            onClick={() => abrirCursosAluno(aluno)}
+            title="Ver cursos"
+            type="button"
+          >
+            +
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  function renderCursosAlunoPopup() {
+    if (!alunoCursosSelecionado) {
+      return null;
+    }
+
+    return (
+      <div
+        className="content-form-modal"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            fecharCursosAluno();
+          }
+        }}
+      >
+        <div
+          aria-label={`Cursos cadastrados de ${alunoCursosSelecionado.aluno.nome}`}
+          aria-modal="true"
+          className="content-form-modal__card content-form-modal__card--compact"
+          role="dialog"
+        >
+          <button className="content-form-modal__close" onClick={fecharCursosAluno} type="button">
+            Fechar
+          </button>
+
+          <PanelCard description={alunoCursosSelecionado.aluno.nome} title="Cursos cadastrados">
+            <ul className="student-course-list">
+              {alunoCursosSelecionado.cursos.map((curso) => (
+                <li key={curso.id}>{curso.titulo}</li>
+              ))}
+            </ul>
+          </PanelCard>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <PanelCard description="Lista vinda da API protegida para administracao e coordenacao." title="Base de alunos">
+      {renderCursosAlunoPopup()}
+
       <div className="table-toolbar table-toolbar--filters">
         <div className="table-filter-group">
           <label className="table-search-control">
@@ -147,7 +266,7 @@ export function SecaoAlunos({ alunos, matriculas = [] }) {
           {
             key: "cursosCadastrados",
             label: "CURSOS CADASTRADOS",
-            render: (aluno) => quantidadeCursosPorAluno.get(aluno.id) || 0
+            render: renderCursosAluno
           },
           {
             key: "ativo",

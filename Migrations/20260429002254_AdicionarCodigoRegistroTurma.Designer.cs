@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PlataformaEnsino.API.Data;
 
@@ -11,9 +12,11 @@ using PlataformaEnsino.API.Data;
 namespace Sistema_Academico_Integrado.Migrations
 {
     [DbContext(typeof(PlataformaContext))]
-    partial class PlataformaContextModelSnapshot : ModelSnapshot
+    [Migration("20260429002254_AdicionarCodigoRegistroTurma")]
+    partial class AdicionarCodigoRegistroTurma
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -328,45 +331,6 @@ namespace Sistema_Academico_Integrado.Migrations
                     b.HasIndex("CriadoPor");
 
                     b.ToTable("Cursos");
-                });
-
-            modelBuilder.Entity("PlataformaEnsino.API.Models.FeedbackAcademico", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("AutorId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CriadoEm")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("DestinatarioId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("Lido")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Mensagem")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Origem")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("nvarchar(120)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AutorId");
-
-                    b.HasIndex("DestinatarioId", "CriadoEm");
-
-                    b.ToTable("FeedbacksAcademicos");
                 });
 
             modelBuilder.Entity("PlataformaEnsino.API.Models.LancamentoNotaAluno", b =>
@@ -1045,6 +1009,10 @@ namespace Sistema_Academico_Integrado.Migrations
                 {
                     b.HasBaseType("PlataformaEnsino.API.Models.Usuario");
 
+                    b.PrimitiveCollection<string>("Feedbacks")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Matricula")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -1052,6 +1020,12 @@ namespace Sistema_Academico_Integrado.Migrations
                     b.Property<string>("TurmaAtual")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.ToTable("Usuarios", t =>
+                        {
+                            t.Property("Feedbacks")
+                                .HasColumnName("Aluno_Feedbacks");
+                        });
 
                     b.HasDiscriminator().HasValue("Aluno");
                 });
@@ -1079,6 +1053,14 @@ namespace Sistema_Academico_Integrado.Migrations
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("nvarchar(120)");
+
+                    b.PrimitiveCollection<string>("Feedbacks")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.PrimitiveCollection<string>("TurmasAtribuidas")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasIndex("CodigoRegistro")
                         .IsUnique()
@@ -1190,24 +1172,6 @@ namespace Sistema_Academico_Integrado.Migrations
                     b.Navigation("Coordenador");
 
                     b.Navigation("Criador");
-                });
-
-            modelBuilder.Entity("PlataformaEnsino.API.Models.FeedbackAcademico", b =>
-                {
-                    b.HasOne("PlataformaEnsino.API.Models.Usuario", "Autor")
-                        .WithMany("FeedbacksEnviados")
-                        .HasForeignKey("AutorId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("PlataformaEnsino.API.Models.Usuario", "Destinatario")
-                        .WithMany("FeedbacksRecebidos")
-                        .HasForeignKey("DestinatarioId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Autor");
-
-                    b.Navigation("Destinatario");
                 });
 
             modelBuilder.Entity("PlataformaEnsino.API.Models.LancamentoNotaAluno", b =>
@@ -1556,13 +1520,6 @@ namespace Sistema_Academico_Integrado.Migrations
                     b.Navigation("ConteudosDidaticos");
 
                     b.Navigation("Matriculas");
-                });
-
-            modelBuilder.Entity("PlataformaEnsino.API.Models.Usuario", b =>
-                {
-                    b.Navigation("FeedbacksEnviados");
-
-                    b.Navigation("FeedbacksRecebidos");
                 });
 
             modelBuilder.Entity("PlataformaEnsino.API.Models.Aluno", b =>

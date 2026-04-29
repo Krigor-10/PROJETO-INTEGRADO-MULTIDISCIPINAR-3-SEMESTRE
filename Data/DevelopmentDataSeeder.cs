@@ -432,6 +432,7 @@ public static class DevelopmentDataSeeder
 
         if (turma is not null)
         {
+            await EnsureTurmaRegistrationCodeAsync(context, turma);
             return turma;
         }
 
@@ -443,7 +444,35 @@ public static class DevelopmentDataSeeder
         };
 
         context.Turmas.Add(turma);
+        await EnsureTurmaRegistrationCodeAsync(context, turma);
         return turma;
+    }
+
+    private static async Task EnsureTurmaRegistrationCodeAsync(PlataformaContext context, Turma turma)
+    {
+        if (!string.IsNullOrWhiteSpace(turma.CodigoRegistro))
+        {
+            return;
+        }
+
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarTurma();
+            var emUsoLocal = context.Turmas.Local.Any(item =>
+                !ReferenceEquals(item, turma) &&
+                item.CodigoRegistro == codigo);
+            var emUsoBanco = await context.Turmas.AnyAsync(item =>
+                item.Id != turma.Id &&
+                item.CodigoRegistro == codigo);
+
+            if (!emUsoLocal && !emUsoBanco)
+            {
+                turma.CodigoRegistro = codigo;
+                return;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para a turma de teste.");
     }
 
     private static async Task<Modulo> EnsureModuloAsync(PlataformaContext context, string title, int courseId)

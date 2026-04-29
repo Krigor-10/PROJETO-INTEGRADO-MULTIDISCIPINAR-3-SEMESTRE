@@ -42,6 +42,7 @@ public class TurmasController : ControllerBase
             var response = new TurmaResponseDto
             {
                 Id = turmaCriada.Id,
+                CodigoRegistro = turmaCriada.CodigoRegistro,
                 NomeTurma = turmaCriada.NomeTurma,
                 DataCriacao = turmaCriada.DataCriacao,
                 CursoId = turmaCriada.CursoId,
@@ -74,6 +75,7 @@ public class TurmasController : ControllerBase
             var response = new TurmaResponseDto
             {
                 Id = turma.Id,
+                CodigoRegistro = turma.CodigoRegistro,
                 NomeTurma = turma.NomeTurma,
                 DataCriacao = turma.DataCriacao,
                 CursoId = turma.CursoId,
@@ -96,6 +98,7 @@ public class TurmasController : ControllerBase
         var response = turmas.Select(t => new TurmaResponseDto
         {
             Id = t.Id,
+            CodigoRegistro = t.CodigoRegistro,
             NomeTurma = t.NomeTurma,
             DataCriacao = t.DataCriacao,
             CursoId = t.CursoId,
@@ -120,6 +123,7 @@ public class TurmasController : ControllerBase
         var response = turmas.Select(t => new TurmaResponseDto
         {
             Id = t.Id,
+            CodigoRegistro = t.CodigoRegistro,
             NomeTurma = t.NomeTurma,
             DataCriacao = t.DataCriacao,
             CursoId = t.CursoId,

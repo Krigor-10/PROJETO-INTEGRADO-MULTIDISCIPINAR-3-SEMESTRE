@@ -125,7 +125,7 @@ export function SecaoTurmas({
       const nomeCurso = curso?.titulo || `Curso #${turma.cursoId}`;
       const nomeProfessor = professor?.nome || (turma.professorId ? `Professor #${turma.professorId}` : "Nao definido");
       const totalAlunos = quantidadeAlunosPorTurma.get(turma.id) || 0;
-      const campos = [turma.nomeTurma, nomeCurso, nomeProfessor, String(totalAlunos)];
+      const campos = [turma.codigoRegistro, turma.nomeTurma, nomeCurso, nomeProfessor, String(totalAlunos)];
 
       return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
     });
@@ -624,6 +624,7 @@ export function SecaoTurmas({
       <DataTable
         columns={[
           ...(podeAtribuirProfessor ? [{ key: "selecionar", label: "Selecionar", render: renderSelecao }] : []),
+          { key: "codigoRegistro", label: "Registro", render: (turma) => turma.codigoRegistro || "Sem codigo" },
           { key: "nomeTurma", label: "Turma" },
           {
             key: "cursoId",

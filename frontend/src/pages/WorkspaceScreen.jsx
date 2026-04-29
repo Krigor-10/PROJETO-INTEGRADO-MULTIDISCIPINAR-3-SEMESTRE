@@ -621,7 +621,7 @@ export default function WorkspaceScreen({
             ) : null}
 
             {activeSection === "alunos" ? (
-              <SecaoAlunos alunos={snapshot.alunos} matriculas={snapshot.matriculas} />
+              <SecaoAlunos alunos={snapshot.alunos} cursos={snapshot.cursos} matriculas={snapshot.matriculas} />
             ) : null}
 
             {activeSection === "professores" ? (

@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using PlataformaEnsino.API.Common;
+using PlataformaEnsino.API.Data;
 using PlataformaEnsino.API.Interfaces;
 using PlataformaEnsino.API.Models;
 
@@ -5,11 +8,16 @@ namespace PlataformaEnsino.API.Services;
 
 public class TurmaService : ITurmaService
 {
+    private readonly PlataformaContext _context;
     private readonly ITurmaRepository _turmaRepository;
     private readonly IGenericRepository<Professor> _professorRepository;
 
-    public TurmaService(ITurmaRepository turmaRepository, IGenericRepository<Professor> professorRepository)
+    public TurmaService(
+        PlataformaContext context,
+        ITurmaRepository turmaRepository,
+        IGenericRepository<Professor> professorRepository)
     {
+        _context = context;
         _turmaRepository = turmaRepository;
         _professorRepository = professorRepository;
     }
@@ -31,6 +39,8 @@ public class TurmaService : ITurmaService
             throw new InvalidOperationException(
                 $"Já existe uma turma com o nome '{turma.NomeTurma}' para este curso.");
         }
+
+        turma.CodigoRegistro = await GerarCodigoTurmaAsync();
 
         await _turmaRepository.AdicionarAsync(turma);
         await _turmaRepository.SalvarAlteracoesAsync();
@@ -72,4 +82,18 @@ public class TurmaService : ITurmaService
         await _turmaRepository.SalvarAlteracoesAsync();
     }
 
+    private async Task<string> GerarCodigoTurmaAsync()
+    {
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarTurma();
+
+            if (!await _context.Turmas.AnyAsync(turma => turma.CodigoRegistro == codigo))
+            {
+                return codigo;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para a turma.");
+    }
 }

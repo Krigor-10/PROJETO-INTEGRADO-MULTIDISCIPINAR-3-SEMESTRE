@@ -9,6 +9,10 @@ public class Turma
     public int Id { get; set; }
 
     [Required]
+    [StringLength(16)]
+    public string CodigoRegistro { get; set; } = string.Empty;
+
+    [Required]
     [StringLength(120)]
     public string NomeTurma { get; set; } = string.Empty;
 
@@ -41,10 +45,5 @@ public class Turma
         ArgumentNullException.ThrowIfNull(professor);
         ProfessorResponsavel = professor;
         ProfessorId = professor.Id;
-    }
-
-    public void AdicionarMaterial(string tituloMaterial)
-    {
-        Console.WriteLine($"[Sistema] Material '{tituloMaterial}' disponibilizado para a turma '{NomeTurma}'.");
     }
 }

@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace PlataformaEnsino.API.Models;
 
@@ -52,6 +54,14 @@ public abstract class Usuario
     public string SenhaHash { get; private set; } = string.Empty;
 
     public bool Ativo { get; private set; } = true;
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<FeedbackAcademico> FeedbacksRecebidos { get; set; } = new();
+
+    [JsonIgnore]
+    [ValidateNever]
+    public List<FeedbackAcademico> FeedbacksEnviados { get; set; } = new();
 
     public void AlterarDados(string nome, string email, string telefone, string cep, string rua, string numero, string bairro, string cidade, string estado)
     {

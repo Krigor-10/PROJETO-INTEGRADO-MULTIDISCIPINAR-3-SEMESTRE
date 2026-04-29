@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { DataTable, InlineMessage, PanelCard } from "../../components/Primitives.jsx";
+import { DataTable, InlineMessage, PanelCard, StatusPill } from "../../components/Primitives.jsx";
 import { ApiError, apiRequest } from "../../lib/api.js";
 import { mapById } from "../../lib/dashboard.js";
 import { formatCep, onlyDigits } from "../../lib/format.js";
@@ -83,12 +83,14 @@ export function SecaoProfessores({ cursos = [], onRefresh, onSessionExpired, pro
     return proximosProfessores.filter((professor) => {
       const cursosDoProfessor = [...(cursosPorProfessor.get(Number(professor.id)) || [])];
       const nomesCursos = cursosDoProfessor.map((cursoId) => cursoPorId.get(cursoId)?.titulo || `Curso #${cursoId}`);
+      const status = professor.ativo ? "Ativo" : "Inativo";
       const campos = [
         professor.codigoRegistro,
         professor.nome,
         professor.email,
         String(cursosDoProfessor.length),
-        ...nomesCursos
+        ...nomesCursos,
+        status
       ];
 
       return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
@@ -646,6 +648,15 @@ export function SecaoProfessores({ cursos = [], onRefresh, onSessionExpired, pro
             key: "cursosEmAndamento",
             label: "Cursos em andamento",
             render: renderCursosProfessor
+          },
+          {
+            key: "ativo",
+            label: "STATUS",
+            render: (professor) => (
+              <StatusPill tone={professor.ativo ? "success" : "danger"}>
+                {professor.ativo ? "Ativo" : "Inativo"}
+              </StatusPill>
+            )
           }
         ]}
         emptyMessage="Nenhum professor encontrado."

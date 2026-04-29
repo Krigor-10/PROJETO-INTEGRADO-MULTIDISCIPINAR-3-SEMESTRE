@@ -1,0 +1,105 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using PlataformaEnsino.API.Models;
+
+namespace PlataformaEnsino.API.Data.Configurations;
+
+public sealed class CursoConfiguration : IEntityTypeConfiguration<Curso>
+{
+    public void Configure(EntityTypeBuilder<Curso> builder)
+    {
+        builder
+            .HasOne(c => c.Coordenador)
+            .WithMany()
+            .HasForeignKey(c => c.CoordenadorId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder
+            .HasOne(c => c.Criador)
+            .WithMany()
+            .HasForeignKey(c => c.CriadoPor)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder
+            .Property(c => c.Preco)
+            .HasPrecision(10, 2);
+
+        builder
+            .Property(c => c.CodigoRegistro)
+            .HasMaxLength(16)
+            .IsRequired();
+
+        builder
+            .HasIndex(c => c.CodigoRegistro)
+            .IsUnique();
+    }
+}
+
+public sealed class ModuloConfiguration : IEntityTypeConfiguration<Modulo>
+{
+    public void Configure(EntityTypeBuilder<Modulo> builder)
+    {
+        builder
+            .HasIndex(m => new { m.CursoId, m.Titulo })
+            .IsUnique();
+
+        builder
+            .Property(m => m.CodigoRegistro)
+            .HasMaxLength(16)
+            .IsRequired();
+
+        builder
+            .HasIndex(m => m.CodigoRegistro)
+            .IsUnique();
+    }
+}
+
+public sealed class TurmaConfiguration : IEntityTypeConfiguration<Turma>
+{
+    public void Configure(EntityTypeBuilder<Turma> builder)
+    {
+        builder
+            .Property(t => t.CodigoRegistro)
+            .HasMaxLength(16)
+            .IsRequired();
+
+        builder
+            .HasIndex(t => t.CodigoRegistro)
+            .IsUnique();
+
+        builder
+            .HasIndex(t => new { t.NomeTurma, t.CursoId })
+            .IsUnique();
+    }
+}
+
+public sealed class MatriculaConfiguration : IEntityTypeConfiguration<Matricula>
+{
+    public void Configure(EntityTypeBuilder<Matricula> builder)
+    {
+        builder
+            .HasOne(m => m.Turma)
+            .WithMany(t => t.Matriculas)
+            .HasForeignKey(m => m.TurmaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder
+            .HasOne(m => m.Aluno)
+            .WithMany(a => a.Matriculas)
+            .HasForeignKey(m => m.AlunoId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder
+            .Property(m => m.NotaFinal)
+            .HasPrecision(4, 2);
+
+        builder
+            .Property(m => m.CodigoRegistro)
+            .HasMaxLength(16)
+            .IsRequired();
+
+        builder
+            .HasIndex(m => m.CodigoRegistro)
+            .IsUnique();
+    }
+}

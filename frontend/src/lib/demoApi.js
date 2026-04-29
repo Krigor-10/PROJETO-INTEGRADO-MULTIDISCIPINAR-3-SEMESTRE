@@ -408,6 +408,7 @@ function createClass(payload) {
 
   const turma = {
     id: nextId(db.turmas),
+    codigoRegistro: nextDemoRegistrationCode(db.turmas, "TUR"),
     nomeTurma,
     cursoId,
     professorId,
@@ -1727,6 +1728,7 @@ function ensureCoordinatorCollection(db) {
 function ensureRegistrationCodes(db) {
   ensureCollectionRegistrationCodes(db.cursos, "CUR");
   ensureCollectionRegistrationCodes(db.modulos, "MOD");
+  ensureCollectionRegistrationCodes(db.turmas, "TUR");
   ensureCollectionRegistrationCodes(db.professores, "PROF");
   ensureCollectionRegistrationCodes(db.matriculas, "MAT");
 }
@@ -2087,6 +2089,7 @@ function createInitialDemoDb() {
     turmas: [
       {
         id: 401,
+        codigoRegistro: "TUR-30Q10H",
         nomeTurma: "Programacao Aplicada - Turma A",
         cursoId: 1,
         professorId: 301,
@@ -2094,6 +2097,7 @@ function createInitialDemoDb() {
       },
       {
         id: 402,
+        codigoRegistro: "TUR-30WHEW",
         nomeTurma: "Banco de Dados - Turma A",
         cursoId: 2,
         professorId: 302,
@@ -2101,6 +2105,7 @@ function createInitialDemoDb() {
       },
       {
         id: 403,
+        codigoRegistro: "TUR-3125DB",
         nomeTurma: "Analise de Dados - Turma Noturna",
         cursoId: 3,
         professorId: 301,
