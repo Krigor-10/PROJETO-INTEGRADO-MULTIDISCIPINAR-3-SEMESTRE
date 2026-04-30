@@ -24,12 +24,6 @@ public static class DevelopmentDataSeeder
             "Fundamentos de Prompt Design"
         ),
         (
-            "Product Analytics para EdTech",
-            "Leitura de metricas, funis e comportamento do aluno para apoiar decisoes de produto.",
-            1180.00m,
-            "Indicadores e Funis de Aprendizagem"
-        ),
-        (
             "Cyberseguranca para Aplicacoes Web",
             "Boas praticas de autenticacao, autorizacao, protecao de dados e endurecimento de APIs.",
             1360.00m,

@@ -15,44 +15,44 @@ export const APP_SECTIONS = [
 
 export const PUBLIC_PILLARS = [
   {
-    title: "Entrada unica",
-    text: "A mesma experiencia conecta home publica, acesso autenticado e acompanhamento academico."
+    title: "Cursos orientados a projeto",
+    text: "Trilhas com pratica guiada, conteudos liberados por turma e acompanhamento de progresso."
   },
   {
-    title: "Fluxo de matricula",
-    text: "O cadastro do aluno envia a solicitacao para a API e ja deixa o funil pronto para acompanhamento."
+    title: "Matricula acompanhada",
+    text: "O aluno solicita entrada pela propria plataforma e acompanha o status quando acessar o painel."
   },
   {
-    title: "Painel vivo",
-    text: "Cursos, turmas e matriculas aparecem no React com dados reais, sem depender das paginas HTML antigas."
+    title: "Sala digital por perfil",
+    text: "Aluno, professor e coordenacao entram no mesmo produto, cada um com as acoes do seu papel."
   }
 ];
 
 export const PUBLIC_NAV_LINKS = [
   { href: "#catalogo", label: "Cursos" },
-  { href: "#jornada", label: "Como funciona" },
-  { href: "#painel", label: "Painel" },
+  { href: "#jornada", label: "Jornada" },
+  { href: "#painel", label: "Acesso" },
   { href: "#ajuda", label: "Ajuda" }
 ];
 
 export const PUBLIC_SUPPORT_CARDS = [
   {
     title: "Quero entender a jornada",
-    text: "Veja como a plataforma conecta vitrine publica, cadastro e painel sem trocar de ambiente.",
+    text: "Veja como descoberta, matricula e painel academico se conectam em poucos passos.",
     actionLabel: "Ver a jornada",
     actionTarget: "#jornada",
     actionType: "anchor"
   },
   {
     title: "Ja tenho acesso",
-    text: "Entre no ambiente autenticado para acompanhar matriculas, turmas e andamento academico.",
+    text: "Entre no ambiente autenticado para acompanhar cursos, turmas, materiais e avaliacoes.",
     actionLabel: "Abrir login",
     actionTarget: "/login",
     actionType: "route"
   },
   {
     title: "Quero comecar agora",
-    text: "Abra o cadastro e envie a sua solicitacao de matricula direto para a API.",
+    text: "Escolha um curso e envie sua solicitacao de matricula para a equipe academica.",
     actionLabel: "Criar conta",
     actionTarget: "/cadastro",
     actionType: "route"

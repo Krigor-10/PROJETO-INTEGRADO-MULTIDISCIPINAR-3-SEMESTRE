@@ -5,8 +5,10 @@ import { InlineMessage, RouteLink } from "../components/Primitives.jsx";
 import { CURATED_COURSES, PUBLIC_PILLARS, PUBLIC_SUPPORT_CARDS } from "../data/appConfig.js";
 import { apiRequest } from "../lib/api.js";
 
+const HIDDEN_PUBLIC_COURSE_TITLES = new Set(["product analytics para edtech"]);
+
 export default function PublicHome({ hasSession, isDemoMode, onNavigate }) {
-  const [courses, setCourses] = useState(CURATED_COURSES);
+  const [courses, setCourses] = useState(() => filterPublicCourses(CURATED_COURSES));
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState("");
 
@@ -20,8 +22,9 @@ export default function PublicHome({ hasSession, isDemoMode, onNavigate }) {
           return;
         }
 
-        if (Array.isArray(response) && response.length > 0) {
-          setCourses(response);
+        const publicCourses = filterPublicCourses(response);
+        if (publicCourses.length > 0) {
+          setCourses(publicCourses);
         }
 
         setStatus("ready");
@@ -48,13 +51,15 @@ export default function PublicHome({ hasSession, isDemoMode, onNavigate }) {
       <GlobalHeader hasSession={hasSession} isDemoMode={isDemoMode} onNavigate={onNavigate} />
 
       <main className="marketing-main">
-        <section className="hero-grid">
-          <article className="hero-copy">
-            <span className="eyebrow">React + ASP.NET Core</span>
-            <h1>Uma frente unica para conhecer, entrar e acompanhar a jornada academica.</h1>
+        <section className="public-hero" aria-labelledby="public-hero-title">
+          <div className="public-hero__scene" aria-hidden="true" />
+
+          <article className="public-hero__content">
+            <span className="eyebrow">Cursos digitais com acompanhamento academico</span>
+            <h1 id="public-hero-title">CodeRyse Academy</h1>
             <p>
-              A home publica, o cadastro e o painel agora vivem no mesmo app React,
-              consumindo a API real e prontos para evoluir sem voltar ao HTML estatico.
+              Descubra cursos, solicite matricula e acompanhe sua jornada em uma plataforma
+              pensada para alunos que querem aprender fazendo.
             </p>
 
             {isDemoMode ? (
@@ -67,55 +72,46 @@ export default function PublicHome({ hasSession, isDemoMode, onNavigate }) {
               <button
                 className="solid-button"
                 type="button"
-                onClick={() => onNavigate(hasSession ? "/app" : "/login")}
+                onClick={() => onNavigate("/cadastro")}
               >
-                {hasSession ? "Ir para o painel" : "Entrar agora"}
-              </button>
-
-              <button className="button button--secondary" type="button" onClick={() => onNavigate("/cadastro")}>
                 Solicitar matricula
               </button>
+
+              <button className="button button--secondary" type="button" onClick={() => onNavigate(hasSession ? "/app" : "/login")}>
+                {hasSession ? "Ir para o painel" : "Entrar"}
+              </button>
             </div>
 
-            <div className="signal-grid">
-              {PUBLIC_PILLARS.map((pillar) => (
-                <article className="signal-card" key={pillar.title}>
-                  <strong>{pillar.title}</strong>
-                  <p>{pillar.text}</p>
-                </article>
-              ))}
-            </div>
+            <dl className="public-hero__metrics" aria-label="Resumo da plataforma">
+              <div>
+                <dt>100%</dt>
+                <dd>fluxo online</dd>
+              </div>
+            </dl>
           </article>
+        </section>
 
-          <aside className="hero-stage" aria-label="Resumo do produto">
-            <div className="hero-orbit" />
-
-            <div className="hero-card-stack">
-              <article className="hero-card hero-card--accent">
-                <span className="eyebrow">Home publica</span>
-                <h2>Capte interesse antes do login</h2>
-                <p>O catalogo conversa com a API e prepara a entrada do aluno sem trocar de plataforma.</p>
+        <section className="public-proof" aria-label="Diferenciais da plataforma">
+          <div className="signal-grid">
+            {PUBLIC_PILLARS.map((pillar) => (
+              <article className="signal-card signal-card--quiet" key={pillar.title}>
+                <strong>{pillar.title}</strong>
+                <p>{pillar.text}</p>
               </article>
-
-              <article className="hero-card">
-                <span className="eyebrow">Fluxo autenticado</span>
-                <h3>Painel por perfil</h3>
-                <p>Admin, coordenador, professor e aluno recebem secoes coerentes com o papel de cada um.</p>
-              </article>
-            </div>
-          </aside>
+            ))}
+          </div>
         </section>
 
         <section className="content-section" id="catalogo">
           <div className="section-head">
             <div>
               <span className="eyebrow">Catalogo conectado</span>
-              <h2>Vitrine de cursos ligada direto na API</h2>
+              <h2>Escolha uma trilha e comece pela matricula</h2>
             </div>
             <p>
               {status === "loading"
-                ? "Lendo o catalogo..."
-                : "Use as setas ou deslize na horizontal para percorrer os cursos."}
+                ? "Lendo os cursos publicados..."
+                : "Use as setas ou deslize na horizontal para percorrer as opcoes."}
             </p>
           </div>
 
@@ -128,22 +124,22 @@ export default function PublicHome({ hasSession, isDemoMode, onNavigate }) {
           <div className="section-head">
             <div>
               <span className="eyebrow">Da visita ao acesso</span>
-              <h2>Uma jornada simples de explicar e facil de expandir</h2>
+              <h2>Do primeiro interesse ao painel do aluno</h2>
             </div>
           </div>
 
           <div className="signal-grid signal-grid--journey">
             <article className="signal-card">
               <strong>1. Descoberta</strong>
-              <p>O visitante enxerga cursos, proposta e caminhos principais sem sair da aplicacao.</p>
+              <p>O visitante conhece as trilhas, compara opcoes e escolhe o caminho de entrada.</p>
             </article>
             <article className="signal-card">
               <strong>2. Cadastro</strong>
-              <p>O formulario React envia a solicitacao completa de matricula com validacao de dados.</p>
+              <p>O formulario envia a solicitacao de matricula com dados completos para analise.</p>
             </article>
             <article className="signal-card">
               <strong>3. Painel</strong>
-              <p>Depois do login, o usuario entra em um workspace montado a partir do proprio perfil.</p>
+              <p>Depois do login, o aluno acessa cursos, materiais, avaliacoes e progresso em um so lugar.</p>
             </article>
           </div>
         </section>
@@ -151,7 +147,7 @@ export default function PublicHome({ hasSession, isDemoMode, onNavigate }) {
         <section className="cta-band" id="painel">
           <div>
             <span className="eyebrow">Acesso unificado</span>
-            <h2>Uma unica navegacao para descobrir cursos, criar conta e voltar ao painel.</h2>
+            <h2>Entre para acompanhar sua turma ou envie uma nova solicitacao de matricula.</h2>
           </div>
 
           <div className="cta-band__actions">
@@ -213,4 +209,15 @@ export default function PublicHome({ hasSession, isDemoMode, onNavigate }) {
       </footer>
     </div>
   );
+}
+
+function filterPublicCourses(courses) {
+  if (!Array.isArray(courses)) {
+    return [];
+  }
+
+  return courses.filter((course) => {
+    const title = String(course.titulo || "").trim().toLowerCase();
+    return !HIDDEN_PUBLIC_COURSE_TITLES.has(title);
+  });
 }
