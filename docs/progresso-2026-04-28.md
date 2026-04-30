@@ -122,8 +122,44 @@ Base de retomada: `docs/progresso-2026-04-25.md`
   `logs/validacao-aluno-avaliacao-aberta.png`
   `logs/validacao-aluno-avaliacao-enviada.png`
 
+## Registro - 2026-04-29 - Home publica e carrossel
+
+- Home publica reorganizada para a marca `CodeRyse Academy`, com metadados, titulo do navegador e favicon atualizados.
+- Banner publico simplificado: removido o card lateral do hero e removidos os indicadores `11 cursos` e `4 perfis`.
+- Textos da home publica ajustados para uma narrativa mais direta de cursos digitais, matricula e acesso ao painel.
+- Secao de diferenciais movida para uma faixa propria abaixo do banner, mantendo os pilares da plataforma sem poluir o hero.
+- Carrossel publico passou a renderizar imagem por curso a partir de assets locais em `frontend/src/assets`.
+- Imagem do curso `Desenvolvimento Web Full Stack` aumentada junto com a area visual dos cards do carrossel.
+- Removido o rotulo sobre a imagem do card (`Trilha em destaque` / badge visual), deixando a capa limpa.
+- Mapeadas imagens especificas para:
+  - `Desenvolvimento Web Full Stack`
+  - `Ciencia de Dados Aplicada`
+  - `UX para Produtos Digitais`
+  - `Arquitetura de Software Moderna`
+  - `Python para Automacao e Dados`
+  - `DevOps e Cloud Foundations`
+  - `Engenharia de Prompt e IA Generativa`
+  - `Cyberseguranca para Aplicacoes Web`
+  - `Mobile com React Native`
+  - `QA e Automacao de Testes`
+- Curso `Product Analytics para EdTech` removido do seed de desenvolvimento em `DevelopmentDataSeeder`.
+- Home publica passou a filtrar `Product Analytics para EdTech`, garantindo que o card nao apareca mesmo quando o registro ainda existe no LocalDB antigo.
+- Observacao importante: a API real ainda possuia o curso `Product Analytics para EdTech` no LocalDB como `id=8`; exclusao fisica do banco nao foi feita porque apagaria dado local e precisa confirmacao explicita.
+- Bundle React recompilado e publicado em `wwwroot/assets/react` com os assets finais do carrossel.
+- Validacao final realizada:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+  `node.exe .\node_modules\vite\bin\vite.js build`
+- Smoke test visual da home publica em `http://127.0.0.1:5012` confirmou:
+  `productCount=0`, `cardCount=10`, `fallbackCount=0`.
+- Evidencias visuais salvas em:
+  `logs/home-publica-sem-product-analytics.png`
+  `logs/home-publica-todas-imagens-cursos.png`
+- Alteracoes commitadas e enviadas para `origin/main`:
+  `f7442b0 - Atualiza home publica e carrossel de cursos`
+
 ## Proximos pontos sugeridos
 
+- Retomada combinada para 2026-04-30: refatorar a apresentacao do projeto para ficar organizada, limpa e pronta para demonstracao.
 - Avaliar se as descricoes visuais em cards e secoes devem ser removidas ou escondidas em telas operacionais para reduzir poluicao da interface.
 - Analisar se o modo demo esta equivalente ao projeto real em funcionalidades e interatividade, mapeando diferencas entre `demoApi.js` e os endpoints/regras do backend.
 - No projeto real, criar feedbacks/confirmacoes para funcionalidades importantes como `Sair`, `Cancelar` e `Deslogar`, evitando acoes bruscas sem retorno claro para o usuario.
