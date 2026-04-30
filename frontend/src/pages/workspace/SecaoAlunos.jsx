@@ -17,30 +17,6 @@ export function SecaoAlunos({ alunos, cursos = [], matriculas = [] }) {
   const [alunoCursosSelecionado, setAlunoCursosSelecionado] = useState(null);
   const termoBusca = useMemo(() => normalizarBusca(buscaAluno), [buscaAluno]);
   const cursoPorId = useMemo(() => mapById(cursos), [cursos]);
-  const matriculaPrincipalPorAluno = useMemo(() => {
-    const matriculasPorAluno = new Map();
-
-    matriculas.forEach((matricula) => {
-      const alunoId = Number(matricula.alunoId);
-      const codigoRegistro = String(matricula.codigoRegistro || "").trim();
-
-      if (!alunoId || !codigoRegistro) {
-        return;
-      }
-
-      const matriculaAtual = matriculasPorAluno.get(alunoId);
-      const statusMatricula = Number(matricula.status);
-      const statusAtual = Number(matriculaAtual?.status);
-
-      if (!matriculaAtual || statusMatricula === 1 || statusAtual !== 1) {
-        matriculasPorAluno.set(alunoId, matricula);
-      }
-    });
-
-    return new Map(
-      [...matriculasPorAluno.entries()].map(([alunoId, matricula]) => [alunoId, matricula.codigoRegistro])
-    );
-  }, [matriculas]);
   const cursosPorAluno = useMemo(() => {
     const cursosMapeados = new Map();
 
@@ -71,8 +47,8 @@ export function SecaoAlunos({ alunos, cursos = [], matriculas = [] }) {
     );
   }, [cursoPorId, matriculas]);
   const obterMatriculaAluno = useCallback(
-    (aluno) => aluno.matricula || matriculaPrincipalPorAluno.get(aluno.id) || "Sem matricula",
-    [matriculaPrincipalPorAluno]
+    (aluno) => String(aluno.matricula || "").trim() || "Sem matricula",
+    []
   );
   const alunosFiltrados = useMemo(() => {
     let proximosAlunos = alunos;

@@ -117,13 +117,8 @@ export function formatMoney(value) {
 }
 
 export function formatDate(value) {
-  if (!value) {
-    return "-";
-  }
-
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseApiDate(value);
+  if (!parsed) {
     return "-";
   }
 
@@ -132,6 +127,27 @@ export function formatDate(value) {
     month: "short",
     year: "numeric"
   }).format(parsed);
+}
+
+export function parseApiDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const text = String(value).trim();
+  const serializedUtcWithoutZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,7})?)?$/.test(text);
+  const parsed = new Date(serializedUtcWithoutZone ? `${text}Z` : text);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function timestampFromApiDate(value, fallback = 0) {
+  const parsed = parseApiDate(value);
+  return parsed ? parsed.getTime() : fallback;
 }
 
 export function formatGrade(value) {

@@ -11,6 +11,7 @@ public static class DevelopmentDataSeeder
     private const string CoordinatorEmail = "coordenacao@edtech.local";
     private const string ProfessorEmail = "professor@edtech.local";
     private const string StudentEmail = "aluno@edtech.local";
+    private const string KrigorStudentEmail = "krigordesousa@gmail.com";
     private const string DefaultPassword = "Edtech@123";
     private const int AdditionalCoordinatorCount = 5;
     private const int AdditionalProfessorCount = 5;
@@ -49,6 +50,7 @@ public static class DevelopmentDataSeeder
         var coordinator = await EnsureCoordinatorAsync(context);
         var professor = await EnsureProfessorAsync(context);
         var student = await EnsureStudentAsync(context);
+        var krigorStudent = await EnsureKrigorStudentAsync(context);
         var additionalCoordinators = await EnsureAdditionalCoordinatorsAsync(context);
         await EnsureAdditionalProfessorsAsync(context);
         var additionalStudents = await EnsureAdditionalStudentsAsync(context);
@@ -126,6 +128,9 @@ public static class DevelopmentDataSeeder
         await EnsurePendingEnrollmentAsync(context, additionalStudents[2], pythonCourse);
         await EnsurePendingEnrollmentAsync(context, additionalStudents[3], devOpsCourse);
         await EnsurePendingEnrollmentAsync(context, additionalStudents[4], promptEngineeringCourse);
+        await EnsurePendingEnrollmentIfAbsentAsync(context, krigorStudent, uxCourse);
+        await EnsurePendingEnrollmentIfAbsentAsync(context, krigorStudent, architectureCourse);
+        await EnsurePendingEnrollmentIfAbsentAsync(context, krigorStudent, pythonCourse);
 
         await context.SaveChangesAsync();
 
@@ -305,6 +310,33 @@ public static class DevelopmentDataSeeder
             phone: "11999990004",
             enrollment: "MAT-DEMO-2026",
             currentClass: "Nao atribuida");
+    }
+
+    private static async Task<Aluno> EnsureKrigorStudentAsync(PlataformaContext context)
+    {
+        var student = await context.Alunos.FirstOrDefaultAsync(user => user.Email == KrigorStudentEmail);
+
+        if (student is null)
+        {
+            return await EnsureStudentAsync(
+                context,
+                name: "Krigor Sousa",
+                email: KrigorStudentEmail,
+                cpf: "44599999999",
+                phone: "11999990099",
+                enrollment: "ALU-KRIGOR",
+                currentClass: "Nao atribuida");
+        }
+
+        student.Nome = "Krigor Sousa";
+        student.Matricula = "ALU-KRIGOR";
+
+        if (string.IsNullOrWhiteSpace(student.TurmaAtual))
+        {
+            student.TurmaAtual = "Nao atribuida";
+        }
+
+        return student;
     }
 
     private static async Task<List<Aluno>> EnsureAdditionalStudentsAsync(PlataformaContext context)
@@ -670,6 +702,21 @@ public static class DevelopmentDataSeeder
         await EnsureEnrollmentRegistrationCodeAsync(context, pendingEnrollment);
 
         context.Matriculas.Add(pendingEnrollment);
+    }
+
+    private static async Task EnsurePendingEnrollmentIfAbsentAsync(PlataformaContext context, Aluno student, Curso course)
+    {
+        var enrollment = await context.Matriculas.FirstOrDefaultAsync(item =>
+            item.AlunoId == student.Id &&
+            item.CursoId == course.Id);
+
+        if (enrollment is not null)
+        {
+            await EnsureEnrollmentRegistrationCodeAsync(context, enrollment);
+            return;
+        }
+
+        await EnsurePendingEnrollmentAsync(context, student, course);
     }
 
     private static async Task EnsureEnrollmentRegistrationCodeAsync(PlataformaContext context, Matricula enrollment)

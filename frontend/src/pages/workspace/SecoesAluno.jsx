@@ -11,16 +11,28 @@ import {
   normalizePublicationStatus,
   normalizeProgressStatus,
   normalizeStatus,
+  parseApiDate,
   progressStatusTone,
-  publicationStatusTone
+  publicationStatusTone,
+  timestampFromApiDate
 } from "../../lib/format.js";
 
-export function SecaoCursosAluno({ conteudos, cursos, matriculas, onNavigate, progressos = {}, turmas }) {
+export function SecaoCursosAluno({ avaliacoes = [], conteudos, cursos, matriculas, onNavigate, progressos = {}, turmas }) {
+  const [matriculaEmDetalheId, setMatriculaEmDetalheId] = useState(null);
+  const [modulosAbertos, setModulosAbertos] = useState({});
   const cursoPorId = useMemo(() => mapById(cursos), [cursos]);
   const turmaPorId = useMemo(() => mapById(turmas), [turmas]);
   const progressoCursoPorMatricula = useMemo(
     () => new Map((progressos.cursos || []).map((progresso) => [progresso.matriculaId, progresso])),
     [progressos.cursos]
+  );
+  const progressoModuloPorChave = useMemo(
+    () => new Map((progressos.modulos || []).map((progresso) => [`${progresso.matriculaId}-${progresso.moduloId}`, progresso])),
+    [progressos.modulos]
+  );
+  const progressoConteudoPorConteudoId = useMemo(
+    () => new Map((progressos.conteudos || []).map((progresso) => [progresso.conteudoDidaticoId, progresso])),
+    [progressos.conteudos]
   );
 
   const resumoConteudosPorTurma = useMemo(() => {
@@ -37,7 +49,7 @@ export function SecaoCursosAluno({ conteudos, cursos, matriculas, onNavigate, pr
       resumoAtual.modulos.add(conteudo.moduloId);
 
       const dataCandidata = conteudo.publicadoEm || conteudo.atualizadoEm || conteudo.criadoEm || null;
-      if (!resumoAtual.ultimaPublicacao || new Date(dataCandidata || 0).getTime() > new Date(resumoAtual.ultimaPublicacao || 0).getTime()) {
+      if (!resumoAtual.ultimaPublicacao || timestampFromApiDate(dataCandidata) > timestampFromApiDate(resumoAtual.ultimaPublicacao)) {
         resumoAtual.ultimaPublicacao = dataCandidata;
       }
 
@@ -70,7 +82,9 @@ export function SecaoCursosAluno({ conteudos, cursos, matriculas, onNavigate, pr
 
           return {
             id: matricula.id,
+            cursoId: matricula.cursoId,
             curso: cursoPorId.get(matricula.cursoId)?.titulo || `Curso #${matricula.cursoId}`,
+            turmaId: matricula.turmaId,
             turma: turmaPorId.get(matricula.turmaId)?.nomeTurma || matricula.turma?.nomeTurma || "Turma em definicao",
             materiais: resumoTurma?.total || 0,
             modulos: resumoTurma?.modulos.size || 0,
@@ -82,38 +96,279 @@ export function SecaoCursosAluno({ conteudos, cursos, matriculas, onNavigate, pr
     [cursoPorId, matriculas, progressoCursoPorMatricula, resumoConteudosPorTurma, turmaPorId]
   );
 
+  useEffect(() => {
+    if (!linhasMatriculasAprovadas.length) {
+      setMatriculaEmDetalheId(null);
+      return;
+    }
+
+    if (!linhasMatriculasAprovadas.some((linha) => linha.id === matriculaEmDetalheId)) {
+      setMatriculaEmDetalheId(linhasMatriculasAprovadas[0].id);
+    }
+  }, [linhasMatriculasAprovadas, matriculaEmDetalheId]);
+
+  const detalheCursoSelecionado = useMemo(() => {
+    const linha = linhasMatriculasAprovadas.find((item) => item.id === matriculaEmDetalheId);
+    if (!linha) {
+      return null;
+    }
+
+    const grupos = new Map();
+    const avaliacoesDaTurma = avaliacoes.filter((avaliacao) => avaliacao.turmaId === linha.turmaId);
+
+    function garantirGrupo(moduloId, tituloModulo) {
+      const chave = moduloId || `sem-modulo-${tituloModulo || "geral"}`;
+      const grupo = grupos.get(chave) || {
+        id: chave,
+        moduloId,
+        titulo: tituloModulo || "Modulo sem titulo",
+        conteudos: [],
+        avaliacoes: []
+      };
+
+      grupos.set(chave, grupo);
+      return grupo;
+    }
+
+    conteudos
+      .filter((conteudo) => conteudo.turmaId === linha.turmaId)
+      .sort((conteudoA, conteudoB) => {
+        const comparacaoModulo = (conteudoA.moduloTitulo || "").localeCompare(conteudoB.moduloTitulo || "", "pt-BR");
+        if (comparacaoModulo !== 0) {
+          return comparacaoModulo;
+        }
+
+        if ((conteudoA.ordemExibicao ?? 0) !== (conteudoB.ordemExibicao ?? 0)) {
+          return (conteudoA.ordemExibicao ?? 0) - (conteudoB.ordemExibicao ?? 0);
+        }
+
+        return (conteudoA.titulo || "").localeCompare(conteudoB.titulo || "", "pt-BR");
+      })
+      .forEach((conteudo) => {
+        const grupo = garantirGrupo(conteudo.moduloId, conteudo.moduloTitulo);
+        grupo.conteudos.push(conteudo);
+      });
+
+    avaliacoesDaTurma.forEach((avaliacao) => {
+      const grupo = garantirGrupo(avaliacao.moduloId, avaliacao.moduloTitulo);
+      grupo.avaliacoes.push(avaliacao);
+    });
+
+    const modulos = [...grupos.values()].map((grupo) => {
+      const progressoModulo = progressoModuloPorChave.get(`${linha.id}-${grupo.moduloId}`);
+      const concluidos = progressoModulo?.conteudosConcluidos ?? grupo.conteudos.filter((conteudo) => estaConcluido(progressoConteudoPorConteudoId.get(conteudo.id))).length;
+      const conteudosComProgresso = grupo.conteudos.map((conteudo) => {
+        const progressoConteudo = progressoConteudoPorConteudoId.get(conteudo.id);
+
+        return {
+          ...conteudo,
+          concluido: estaConcluido(progressoConteudo),
+          progresso: progressoConteudo?.percentualConclusao || 0,
+          statusProgresso: progressoConteudo?.statusProgresso || 1
+        };
+      });
+
+      return {
+        ...grupo,
+        conteudos: conteudosComProgresso,
+        avaliacoes: grupo.avaliacoes.sort((avaliacaoA, avaliacaoB) =>
+          (avaliacaoA.titulo || "").localeCompare(avaliacaoB.titulo || "", "pt-BR")
+        ),
+        concluidos,
+        progresso: progressoModulo?.percentualConclusao || calcularProgressoModulo(conteudosComProgresso),
+        status: progressoModulo?.statusProgresso || 1
+      };
+    });
+
+    const proximaAcao = obterProximaAcaoCurso(modulos);
+
+    return {
+      ...linha,
+      modulos,
+      proximaAcao
+    };
+  }, [avaliacoes, conteudos, linhasMatriculasAprovadas, matriculaEmDetalheId, progressoConteudoPorConteudoId, progressoModuloPorChave]);
+
+  useEffect(() => {
+    if (!detalheCursoSelecionado?.modulos.length) {
+      return;
+    }
+
+    const moduloPadrao = detalheCursoSelecionado.proximaAcao?.moduloId || detalheCursoSelecionado.modulos[0].id;
+
+    setModulosAbertos((atuais) => {
+      if (atuais[moduloPadrao]) {
+        return atuais;
+      }
+
+      return {
+        ...atuais,
+        [moduloPadrao]: true
+      };
+    });
+  }, [detalheCursoSelecionado?.modulos, detalheCursoSelecionado?.proximaAcao?.moduloId]);
+
+  function alternarModuloJornada(moduloId) {
+    setModulosAbertos((atuais) => ({
+      ...atuais,
+      [moduloId]: !atuais[moduloId]
+    }));
+  }
+
   return (
     <div className="content-section content-section--student">
-      <PanelCard
-        description="Cursos com matricula aprovada e os materiais ja publicados para cada turma."
-        title="Minha jornada ativa"
-      >
-        <DataTable
-          columns={[
-            { key: "curso", label: "Curso" },
-            { key: "turma", label: "Turma" },
-            { key: "materiais", label: "Materiais" },
-            { key: "modulos", label: "Modulos" },
-            { key: "progresso", label: "Progresso", render: (row) => formatPercent(row.progresso) },
-            { key: "ultimaPublicacao", label: "Ultima publicacao", render: (row) => formatDate(row.ultimaPublicacao) },
-            { key: "notaFinal", label: "Nota atual", render: (row) => formatGrade(row.notaFinal) },
-            {
-              key: "acoes",
-              label: "Acesso",
-              render: (row) =>
-                row.materiais ? (
-                  <RouteLink className="table-action" onNavigate={onNavigate} to="/app/conteudos">
-                    Ver materiais
+      <div className={`module-management-layout${detalheCursoSelecionado ? " module-management-layout--with-detail" : ""}`}>
+        <PanelCard
+          description="Cursos com matricula aprovada, materiais publicados e progresso consolidado por turma."
+          title="Minha jornada ativa"
+        >
+          <DataTable
+            columns={[
+              { key: "curso", label: "Curso" },
+              { key: "turma", label: "Turma" },
+              { key: "materiais", label: "Materiais" },
+              { key: "modulos", label: "Modulos" },
+              { key: "progresso", label: "Progresso", render: (row) => formatPercent(row.progresso) },
+              { key: "ultimaPublicacao", label: "Ultima publicacao", render: (row) => formatDate(row.ultimaPublicacao) },
+              { key: "notaFinal", label: "Nota atual", render: (row) => formatGrade(row.notaFinal) },
+              {
+                key: "detalhe",
+                label: "",
+                render: (row) => (
+                  <button
+                    aria-label={`Abrir modulos de ${row.curso}`}
+                    className="table-row-arrow"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMatriculaEmDetalheId(row.id);
+                    }}
+                    type="button"
+                  >
+                    &gt;
+                  </button>
+                )
+              }
+            ]}
+            emptyMessage="Assim que uma matricula for aprovada, os seus cursos ativos vao aparecer aqui."
+            getRowAriaLabel={(row) => `Abrir modulos de ${row.curso}`}
+            getRowClassName={(row) =>
+              `table-row--clickable${row.id === matriculaEmDetalheId ? " table-row--selected" : ""}`
+            }
+            onRowClick={(row) => setMatriculaEmDetalheId(row.id)}
+            rows={linhasMatriculasAprovadas}
+          />
+        </PanelCard>
+
+        {detalheCursoSelecionado ? (
+          <aside className="module-detail-column student-course-detail" aria-label="Detalhes do curso selecionado">
+            <PanelCard
+              description={`${detalheCursoSelecionado.turma} - ${detalheCursoSelecionado.materiais} material(is) publicado(s)`}
+              title={detalheCursoSelecionado.curso}
+            >
+              <div className="student-course-detail__summary">
+                <span className="chip">{formatPercent(detalheCursoSelecionado.progresso)} de progresso</span>
+                <span className="chip">{detalheCursoSelecionado.modulos.length} modulo(s)</span>
+                <span className="chip">{formatGrade(detalheCursoSelecionado.notaFinal)} nota atual</span>
+              </div>
+
+              <div className="student-course-detail__next">
+                <span>Proxima acao</span>
+                <strong>{detalheCursoSelecionado.proximaAcao.titulo}</strong>
+                <p>{detalheCursoSelecionado.proximaAcao.descricao}</p>
+                {detalheCursoSelecionado.proximaAcao.to ? (
+                  <RouteLink className="table-action student-course-detail__action" onNavigate={onNavigate} to={detalheCursoSelecionado.proximaAcao.to}>
+                    {detalheCursoSelecionado.proximaAcao.label}
                   </RouteLink>
                 ) : (
-                  <span className="student-course-note">Sem material ainda</span>
-                )
-            }
-          ]}
-          emptyMessage="Assim que uma matricula for aprovada, os seus cursos ativos vao aparecer aqui."
-          rows={linhasMatriculasAprovadas}
-        />
-      </PanelCard>
+                  <StatusPill tone={detalheCursoSelecionado.proximaAcao.tone || "success"}>
+                    {detalheCursoSelecionado.proximaAcao.label}
+                  </StatusPill>
+                )}
+              </div>
+
+              {detalheCursoSelecionado.modulos.length ? (
+                <div className="student-course-detail__journey">
+                  {detalheCursoSelecionado.modulos.map((modulo) => (
+                    <article className="module-detail-card student-course-detail__module" key={modulo.id}>
+                      <button
+                        aria-expanded={Boolean(modulosAbertos[modulo.id])}
+                        className="student-course-detail__module-toggle"
+                        onClick={() => alternarModuloJornada(modulo.id)}
+                        type="button"
+                      >
+                        <div>
+                          <span>Modulo</span>
+                          <strong>{modulo.titulo}</strong>
+                        </div>
+                        <div className="student-course-detail__module-status">
+                          <StatusPill tone={progressStatusTone(modulo.status)}>{normalizeProgressStatus(modulo.status)}</StatusPill>
+                          <span aria-hidden="true">{modulosAbertos[modulo.id] ? "-" : "+"}</span>
+                        </div>
+                      </button>
+
+                      {modulosAbertos[modulo.id] ? (
+                        <div className="student-course-detail__module-body">
+                          <div className="student-content-card__progress">
+                            <StatusPill tone={progressStatusTone(modulo.status)}>
+                              {modulo.concluidos}/{modulo.conteudos.length} conteudo(s)
+                            </StatusPill>
+                            <div className="student-progress-bar" aria-hidden="true">
+                              <span style={{ width: `${Math.max(0, Math.min(modulo.progresso, 100))}%` }} />
+                            </div>
+                          </div>
+
+                          {modulo.conteudos.length ? (
+                            <ul className="student-course-detail__content-list">
+                              {modulo.conteudos.map((conteudo) => (
+                                <li key={conteudo.id}>
+                                  <span>{normalizeContentType(conteudo.tipoConteudo)}</span>
+                                  <strong>{conteudo.titulo}</strong>
+                                  <StatusPill tone={conteudo.concluido ? "success" : progressStatusTone(conteudo.statusProgresso)}>
+                                    {conteudo.concluido ? "Concluido" : normalizeProgressStatus(conteudo.statusProgresso)}
+                                  </StatusPill>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="student-course-note">Nenhum conteudo publicado neste modulo.</p>
+                          )}
+
+                          {modulo.avaliacoes.length ? (
+                            <div className="student-course-detail__evaluation-list">
+                              <span>Avaliacoes do modulo</span>
+                              {modulo.avaliacoes.map((avaliacao) => {
+                                const disponibilidade = obterDisponibilidadeAvaliacao(avaliacao);
+
+                                return (
+                                  <article key={avaliacao.id}>
+                                    <div>
+                                      <strong>{avaliacao.titulo}</strong>
+                                      <p>{normalizeEvaluationType(avaliacao.tipoAvaliacao)} - {avaliacao.totalQuestoes || 0} questao(oes)</p>
+                                    </div>
+                                    <StatusPill tone={disponibilidade.tone}>{disponibilidade.label}</StatusPill>
+                                  </article>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState message="Este curso ainda nao possui modulos publicados para a sua turma." />
+              )}
+
+              {detalheCursoSelecionado.materiais ? (
+                <RouteLink className="table-action student-course-detail__action" onNavigate={onNavigate} to="/app/conteudos">
+                  Abrir materiais
+                </RouteLink>
+              ) : null}
+            </PanelCard>
+          </aside>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -137,23 +392,12 @@ export function SecaoAvaliacoesAluno({ avaliacoes, onRefresh, onSessionExpired }
           return comparacaoCurso;
         }
 
-        const aberturaA = new Date(avaliacaoA.dataAbertura || avaliacaoA.publicadoEm || 0).getTime();
-        const aberturaB = new Date(avaliacaoB.dataAbertura || avaliacaoB.publicadoEm || 0).getTime();
+        const aberturaA = timestampFromApiDate(avaliacaoA.dataAbertura || avaliacaoA.publicadoEm);
+        const aberturaB = timestampFromApiDate(avaliacaoB.dataAbertura || avaliacaoB.publicadoEm);
         return aberturaA - aberturaB;
       }),
     [avaliacoes]
   );
-
-  const resumoAvaliacoes = useMemo(() => {
-    const disponiveis = avaliacoesOrdenadas.filter((avaliacao) => obterDisponibilidadeAvaliacao(avaliacao).podeRealizar);
-    const concluidas = avaliacoesOrdenadas.filter((avaliacao) => avaliacao.tentativasRealizadas > 0);
-
-    return [
-      `${avaliacoesOrdenadas.length} avaliacao(oes) publicada(s)`,
-      `${disponiveis.length} disponivel(is) agora`,
-      `${concluidas.length} com tentativa registrada`
-    ];
-  }, [avaliacoesOrdenadas]);
 
   useEffect(() => {
     if (!avaliacaoEmExecucao) {
@@ -302,21 +546,6 @@ export function SecaoAvaliacoesAluno({ avaliacoes, onRefresh, onSessionExpired }
 
   return (
     <div className="content-section content-section--student">
-      <section className="content-section__intro">
-        <div className="content-section__intro-copy">
-          <span className="eyebrow">Avaliacoes do aluno</span>
-          <h2>Avaliacoes publicadas pelos professores</h2>
-          <p>Responda provas, quizzes e exercicios liberados para as turmas em que sua matricula esta aprovada.</p>
-        </div>
-        <div className="content-section__highlights" aria-label="Resumo de avaliacoes do aluno">
-          {resumoAvaliacoes.map((item) => (
-            <span className="chip" key={item}>
-              {item}
-            </span>
-          ))}
-        </div>
-      </section>
-
       {!avaliacaoEmExecucao && mensagem.message ? <InlineMessage tone={mensagem.tone}>{mensagem.message}</InlineMessage> : null}
 
       <PanelCard
@@ -527,23 +756,12 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
     [matriculas]
   );
 
-  const matriculaPorTurmaId = useMemo(
-    () => new Map(matriculasAprovadas.map((matricula) => [matricula.turmaId, matricula])),
-    [matriculasAprovadas]
-  );
-
   const progressosConteudos = progressos.conteudos || [];
-  const progressosModulos = progressos.modulos || [];
   const progressosCursos = progressos.cursos || [];
 
   const progressoConteudoPorConteudoId = useMemo(
     () => new Map(progressosConteudos.map((progresso) => [progresso.conteudoDidaticoId, progresso])),
     [progressosConteudos]
-  );
-
-  const progressoModuloPorChave = useMemo(
-    () => new Map(progressosModulos.map((progresso) => [`${progresso.matriculaId}-${progresso.moduloId}`, progresso])),
-    [progressosModulos]
   );
 
   const conteudosOrdenados = useMemo(
@@ -596,36 +814,6 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
     }
   }
 
-  const totalConteudosPorTurma = useMemo(() => {
-    const contagens = new Map();
-
-    conteudosOrdenados.forEach((conteudo) => {
-      contagens.set(conteudo.turmaId, (contagens.get(conteudo.turmaId) || 0) + 1);
-    });
-
-    return contagens;
-  }, [conteudosOrdenados]);
-
-  const ultimaPublicacaoPorTurma = useMemo(() => {
-    const datas = new Map();
-
-    conteudosOrdenados.forEach((conteudo) => {
-      const dataAtual = datas.get(conteudo.turmaId);
-      const novaData = conteudo.publicadoEm || conteudo.atualizadoEm || conteudo.criadoEm;
-
-      if (!dataAtual) {
-        datas.set(conteudo.turmaId, novaData);
-        return;
-      }
-
-      if (new Date(novaData || 0).getTime() > new Date(dataAtual || 0).getTime()) {
-        datas.set(conteudo.turmaId, novaData);
-      }
-    });
-
-    return datas;
-  }, [conteudosOrdenados]);
-
   const resumoAluno = useMemo(() => {
     const turmasUnicas = new Set(conteudosOrdenados.map((conteudo) => conteudo.turmaId)).size;
     const modulosUnicos = new Set(conteudosOrdenados.map((conteudo) => conteudo.moduloId)).size;
@@ -644,116 +832,9 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
     ];
   }, [conteudosOrdenados, matriculasAprovadas.length, progressosCursos]);
 
-  const linhasAcesso = useMemo(
-    () =>
-      matriculasAprovadas.map((matricula) => ({
-        id: matricula.id,
-        curso: matricula.curso?.titulo || `Curso #${matricula.cursoId}`,
-        turma: matricula.turma?.nomeTurma || "Turma em definicao",
-        materiais: totalConteudosPorTurma.get(matricula.turmaId) || 0,
-        ultimaPublicacao: ultimaPublicacaoPorTurma.get(matricula.turmaId) || null,
-        notaFinal: matricula.notaFinal ?? 0
-      })),
-    [matriculasAprovadas, totalConteudosPorTurma, ultimaPublicacaoPorTurma]
-  );
-
-  const linhasModulos = useMemo(() => {
-    const grupos = new Map();
-
-    conteudosOrdenados.forEach((conteudo) => {
-      const matricula = matriculaPorTurmaId.get(conteudo.turmaId);
-      const matriculaId = matricula?.id || 0;
-      const chave = `${matriculaId}-${conteudo.moduloId}`;
-      const item = grupos.get(chave) || {
-        id: chave,
-        curso: conteudo.cursoTitulo || `Curso #${conteudo.cursoId}`,
-        turma: conteudo.turmaNome || `Turma #${conteudo.turmaId}`,
-        modulo: conteudo.moduloTitulo || "Modulo sem titulo",
-        matriculaId,
-        moduloId: conteudo.moduloId,
-        conteudosIds: []
-      };
-
-      item.conteudosIds.push(conteudo.id);
-      grupos.set(chave, item);
-    });
-
-    return [...grupos.values()].map((item) => {
-      const progressoModulo = progressoModuloPorChave.get(`${item.matriculaId}-${item.moduloId}`);
-      const concluidos = progressoModulo?.conteudosConcluidos ?? item.conteudosIds.filter((conteudoId) => {
-        const progressoConteudo = progressoConteudoPorConteudoId.get(conteudoId);
-        return estaConcluido(progressoConteudo);
-      }).length;
-
-      return {
-        ...item,
-        materiais: item.conteudosIds.length,
-        concluidos,
-        progresso: progressoModulo?.percentualConclusao || 0,
-        status: progressoModulo?.statusProgresso || 1
-      };
-    });
-  }, [conteudosOrdenados, matriculaPorTurmaId, progressoConteudoPorConteudoId, progressoModuloPorChave]);
-
   return (
     <div className="content-section content-section--student">
-      <section className="content-section__intro">
-        <div className="content-section__intro-copy">
-          <span className="eyebrow">Experiencia do aluno</span>
-          <h2>Materiais liberados para a sua jornada</h2>
-          <p>Acompanhe o que ja foi publicado para as suas turmas e avance por curso, modulo e formato de estudo.</p>
-        </div>
-        <div className="content-section__highlights" aria-label="Resumo da trilha do aluno">
-          {resumoAluno.map((item) => (
-            <span className="chip" key={item}>
-              {item}
-            </span>
-          ))}
-        </div>
-      </section>
-
       {mensagem.message ? <InlineMessage tone={mensagem.tone}>{mensagem.message}</InlineMessage> : null}
-
-      <PanelCard
-        description="Cada linha mostra as turmas aprovadas no seu perfil e quantos materiais ja estao visiveis nelas."
-        title="Acesso por turma"
-      >
-        <DataTable
-          columns={[
-            { key: "curso", label: "Curso" },
-            { key: "turma", label: "Turma" },
-            { key: "materiais", label: "Materiais liberados" },
-            { key: "ultimaPublicacao", label: "Ultima publicacao", render: (row) => formatDate(row.ultimaPublicacao) },
-            { key: "notaFinal", label: "Nota atual", render: (row) => formatGrade(row.notaFinal) }
-          ]}
-          emptyMessage="Assim que a sua matricula for aprovada, as turmas com materiais publicados vao aparecer aqui."
-          rows={linhasAcesso}
-        />
-      </PanelCard>
-
-      <PanelCard
-        description="Avanco consolidado a partir dos materiais concluidos em cada modulo publicado."
-        title="Progresso por modulo"
-      >
-        <DataTable
-          columns={[
-            { key: "curso", label: "Curso" },
-            { key: "modulo", label: "Modulo" },
-            { key: "materiais", label: "Materiais" },
-            { key: "concluidos", label: "Concluidos" },
-            { key: "progresso", label: "Progresso", render: (row) => formatPercent(row.progresso) },
-            {
-              key: "status",
-              label: "Status",
-              render: (row) => (
-                <StatusPill tone={progressStatusTone(row.status)}>{normalizeProgressStatus(row.status)}</StatusPill>
-              )
-            }
-          ]}
-          emptyMessage="Os modulos publicados aparecerao aqui conforme os materiais forem liberados."
-          rows={linhasModulos}
-        />
-      </PanelCard>
 
       <PanelCard
         description="Biblioteca organizada por curso, turma e modulo para facilitar a consulta dos materiais mais recentes."
@@ -832,6 +913,21 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
           <EmptyState message="Nenhum conteudo publicado foi liberado para as suas turmas ate agora." />
         )}
       </PanelCard>
+
+      <section className="content-section__intro">
+        <div className="content-section__intro-copy">
+          <span className="eyebrow">Experiencia do aluno</span>
+          <h2>Materiais liberados para a sua jornada</h2>
+          <p>Acompanhe o que ja foi publicado para as suas turmas e avance por curso, modulo e formato de estudo.</p>
+        </div>
+        <div className="content-section__highlights" aria-label="Resumo da trilha do aluno">
+          {resumoAluno.map((item) => (
+            <span className="chip" key={item}>
+              {item}
+            </span>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -848,6 +944,54 @@ function normalizeEvaluationType(type) {
   }
 
   return type || "Avaliacao";
+}
+
+function calcularProgressoModulo(conteudos) {
+  if (!conteudos.length) {
+    return 0;
+  }
+
+  const concluidos = conteudos.filter((conteudo) => conteudo.concluido).length;
+  return (concluidos / conteudos.length) * 100;
+}
+
+function obterProximaAcaoCurso(modulos) {
+  for (const modulo of modulos) {
+    const conteudoPendente = modulo.conteudos.find((conteudo) => !conteudo.concluido);
+    if (conteudoPendente) {
+      return {
+        moduloId: modulo.id,
+        titulo: `Continuar ${modulo.titulo}`,
+    descricao: `Proximo material: ${conteudoPendente.titulo}.`,
+    label: "Abrir materiais",
+    tone: "warning",
+    to: "/app/conteudos"
+  };
+    }
+
+    const avaliacaoDisponivel = modulo.avaliacoes.find((avaliacao) => obterDisponibilidadeAvaliacao(avaliacao).podeRealizar);
+    if (avaliacaoDisponivel) {
+      return {
+        moduloId: modulo.id,
+        titulo: "Realizar avaliacao",
+    descricao: `${avaliacaoDisponivel.titulo} esta disponivel para este modulo.`,
+    label: "Realizar avaliacao",
+    tone: "warning",
+    to: "/app/avaliacoes"
+  };
+    }
+  }
+
+  return {
+    moduloId: modulos[0]?.id || null,
+    titulo: modulos.length ? "Curso em dia" : "Aguardando publicacoes",
+    descricao: modulos.length
+      ? "Todos os materiais e avaliacoes disponiveis ja foram encaminhados."
+      : "Assim que houver modulo publicado, a proxima etapa aparecera aqui.",
+    label: modulos.length ? "Jornada concluida" : "Sem publicacoes",
+    tone: modulos.length ? "success" : "info",
+    to: null
+  };
 }
 
 function normalizeQuestionType(type) {
@@ -883,8 +1027,8 @@ function formatScore(value) {
 
 function obterDisponibilidadeAvaliacao(avaliacao) {
   const agora = new Date();
-  const abertura = avaliacao.dataAbertura ? new Date(avaliacao.dataAbertura) : null;
-  const fechamento = avaliacao.dataFechamento ? new Date(avaliacao.dataFechamento) : null;
+  const abertura = parseApiDate(avaliacao.dataAbertura);
+  const fechamento = parseApiDate(avaliacao.dataFechamento);
 
   if (!avaliacao.totalQuestoes) {
     return {

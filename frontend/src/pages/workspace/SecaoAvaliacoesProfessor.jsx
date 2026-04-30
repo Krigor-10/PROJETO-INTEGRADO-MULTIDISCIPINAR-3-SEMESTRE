@@ -6,6 +6,7 @@ import {
   compactText,
   formatDate,
   normalizePublicationStatus,
+  parseApiDate,
   publicationStatusTone
 } from "../../lib/format.js";
 
@@ -74,8 +75,8 @@ function toDatetimeLocalValue(value) {
     return "";
   }
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseApiDate(value);
+  if (!parsed) {
     return "";
   }
 

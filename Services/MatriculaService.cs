@@ -114,7 +114,7 @@ public class MatriculaService : IMatriculaService
         }
 
         matricula.AprovarComTurma(turmaId, matricula.CursoId);
-        aluno.Matricula = matricula.CodigoRegistro;
+        await GarantirCodigoAlunoAsync(aluno);
         aluno.TurmaAtual = turma.NomeTurma;
 
         _matriculaRepository.Atualizar(matricula);
@@ -157,5 +157,33 @@ public class MatriculaService : IMatriculaService
         }
 
         throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para a matricula.");
+    }
+
+    private async Task GarantirCodigoAlunoAsync(Aluno aluno)
+    {
+        var matriculaAtual = aluno.Matricula?.Trim();
+
+        if (!string.IsNullOrWhiteSpace(matriculaAtual) &&
+            !matriculaAtual.Equals("Pendente", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        aluno.Matricula = await GerarCodigoAlunoAsync(aluno.Id);
+    }
+
+    private async Task<string> GerarCodigoAlunoAsync(int alunoId)
+    {
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarAluno();
+
+            if (!await _context.Alunos.AnyAsync(aluno => aluno.Id != alunoId && aluno.Matricula == codigo))
+            {
+                return codigo;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o aluno.");
     }
 }

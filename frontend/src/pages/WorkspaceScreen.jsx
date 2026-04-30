@@ -14,7 +14,7 @@ import { ResumoWorkspace } from "./workspace/ResumoWorkspace.jsx";
 import { APP_SECTIONS, getSectionMeta, MANAGER_ROLES, EMPTY_SNAPSHOT } from "../data/appConfig.js";
 import { hasSnapshotData, loadWorkspaceSnapshot, mapById } from "../lib/dashboard.js";
 import { ApiError } from "../lib/api.js";
-import { formatDate, formatGrade, maskCpf, normalizeStatus } from "../lib/format.js";
+import { formatDate, formatGrade, maskCpf, normalizeStatus, timestampFromApiDate } from "../lib/format.js";
 import { normalizePath } from "../lib/router.js";
 
 export default function WorkspaceScreen({
@@ -32,6 +32,7 @@ export default function WorkspaceScreen({
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [confirmacaoSessao, setConfirmacaoSessao] = useState(null);
   const [solicitacaoNovoConteudo, setSolicitacaoNovoConteudo] = useState(0);
   const [solicitacaoNovaAvaliacao, setSolicitacaoNovaAvaliacao] = useState(0);
   const [cursoEmFocoPorSecao, setCursoEmFocoPorSecao] = useState({
@@ -58,7 +59,7 @@ export default function WorkspaceScreen({
     : "dashboard";
   const showOverviewCards = isManager
     ? activeSection === "dashboard"
-    : !isProfessor && activeSection !== "conteudos" && !(isStudent && activeSection === "matriculas");
+    : !isProfessor && activeSection !== "conteudos" && !(isStudent && ["avaliacoes", "matriculas", "meus-cursos"].includes(activeSection));
   const mostrarAcaoCriarConteudo = isProfessor && activeSection === "conteudos";
   const mostrarAcaoCriarAvaliacao = isProfessor && activeSection === "avaliacoes";
 
@@ -92,6 +93,28 @@ export default function WorkspaceScreen({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isProfileOpen]);
+
+  useEffect(() => {
+    if (!confirmacaoSessao) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setConfirmacaoSessao(null);
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [confirmacaoSessao]);
 
   useEffect(() => {
     let ignore = false;
@@ -214,7 +237,7 @@ export default function WorkspaceScreen({
 
   const latestStudentRequest = useMemo(() => {
     const latest = [...snapshot.matriculas].sort(
-      (left, right) => new Date(right.dataSolicitacao || 0).getTime() - new Date(left.dataSolicitacao || 0).getTime()
+      (left, right) => timestampFromApiDate(right.dataSolicitacao) - timestampFromApiDate(left.dataSolicitacao)
     )[0];
 
     return latest?.dataSolicitacao || null;
@@ -224,7 +247,7 @@ export default function WorkspaceScreen({
     const latest = [...snapshot.conteudos]
       .map((conteudo) => conteudo.publicadoEm || conteudo.atualizadoEm || conteudo.criadoEm || null)
       .filter(Boolean)
-      .sort((left, right) => new Date(right || 0).getTime() - new Date(left || 0).getTime())[0];
+      .sort((left, right) => timestampFromApiDate(right) - timestampFromApiDate(left))[0];
 
     return latest || null;
   }, [snapshot.conteudos]);
@@ -413,6 +436,30 @@ export default function WorkspaceScreen({
     });
   }
 
+  function solicitarSaida(tipo) {
+    setConfirmacaoSessao(
+      tipo === "demo"
+        ? {
+            title: "Sair do modo demo?",
+            description: "A sessao demo sera encerrada e voce volta para o login.",
+            confirmLabel: "Sair do demo",
+            onConfirm: () => onDemoModeExit("/login")
+          }
+        : {
+            title: "Encerrar sessao?",
+            description: "Voce sera desconectado e voltara para a home publica.",
+            confirmLabel: "Sair",
+            onConfirm: () => onLogout("/")
+          }
+    );
+  }
+
+  function confirmarSaida() {
+    const acao = confirmacaoSessao?.onConfirm;
+    setConfirmacaoSessao(null);
+    acao?.();
+  }
+
   return (
     <div className="workspace-app">
       <header className="workspace-globalbar">
@@ -466,7 +513,7 @@ export default function WorkspaceScreen({
               </span>
               <StatusPill tone="warning">Modo demo</StatusPill>
               {canDisableDemoMode ? (
-                <button className="workspace-globalbar__logout" type="button" onClick={() => onDemoModeExit("/login")}>
+                <button className="workspace-globalbar__logout" type="button" onClick={() => solicitarSaida("demo")}>
                   Sair do demo
                 </button>
               ) : null}
@@ -475,11 +522,21 @@ export default function WorkspaceScreen({
           <span className="workspace-globalbar__separator" aria-hidden="true">
             |
           </span>
-          <button className="workspace-globalbar__logout" type="button" onClick={() => onLogout("/")}>
+          <button className="workspace-globalbar__logout" type="button" onClick={() => solicitarSaida("sessao")}>
             Sair
           </button>
         </div>
       </header>
+
+      {confirmacaoSessao ? (
+        <ConfirmacaoSessaoModal
+          confirmLabel={confirmacaoSessao.confirmLabel}
+          description={confirmacaoSessao.description}
+          onCancel={() => setConfirmacaoSessao(null)}
+          onConfirm={confirmarSaida}
+          title={confirmacaoSessao.title}
+        />
+      ) : null}
 
       {isProfileOpen ? (
         <ModalPerfilWorkspace
@@ -611,6 +668,7 @@ export default function WorkspaceScreen({
 
             {activeSection === "meus-cursos" ? (
               <SecaoCursosAluno
+                avaliacoes={snapshot.avaliacoes}
                 conteudos={snapshot.conteudos}
                 cursos={snapshot.cursos}
                 matriculas={snapshot.matriculas}
@@ -738,6 +796,33 @@ export default function WorkspaceScreen({
           </>
         ) : null}
       </main>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmacaoSessaoModal({ confirmLabel, description, onCancel, onConfirm, title }) {
+  return (
+    <div
+      className="content-form-modal session-confirmation-modal"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onCancel();
+        }
+      }}
+      role="presentation"
+    >
+      <div aria-label={title} aria-modal="true" className="content-form-modal__card content-form-modal__card--compact" role="dialog">
+        <PanelCard description={description} title={title}>
+          <div className="session-confirmation-modal__actions">
+            <button className="button button--secondary" onClick={onCancel} type="button">
+              Cancelar
+            </button>
+            <button className="button button--danger" onClick={onConfirm} type="button">
+              {confirmLabel}
+            </button>
+          </div>
+        </PanelCard>
       </div>
     </div>
   );

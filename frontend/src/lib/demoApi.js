@@ -245,7 +245,7 @@ function registerStudent(payload) {
     estado: String(payload.estado || "").trim().toUpperCase(),
     tipoUsuario: "Aluno",
     ativo: true,
-    matricula: "Pendente",
+    matricula: nextDemoStudentRegistrationCode(db),
     senha: String(payload.senha || "")
   });
 
@@ -587,7 +587,7 @@ function approveEnrollment(enrollmentId, turmaIdPayload) {
   matricula.turmaId = turma.id;
   matricula.status = 1;
   if (aluno) {
-    aluno.matricula = matricula.codigoRegistro;
+    ensureDemoStudentRegistrationCode(db, aluno);
     aluno.turmaAtual = turma.nomeTurma;
   }
 
@@ -1726,11 +1726,29 @@ function ensureCoordinatorCollection(db) {
 }
 
 function ensureRegistrationCodes(db) {
+  ensureStudentRegistrationCodes(db);
   ensureCollectionRegistrationCodes(db.cursos, "CUR");
   ensureCollectionRegistrationCodes(db.modulos, "MOD");
   ensureCollectionRegistrationCodes(db.turmas, "TUR");
   ensureCollectionRegistrationCodes(db.professores, "PROF");
   ensureCollectionRegistrationCodes(db.matriculas, "MAT");
+}
+
+function ensureStudentRegistrationCodes(db) {
+  const usedCodes = new Set();
+
+  db.alunos.forEach((aluno) => {
+    const currentCode = String(aluno.matricula || "").trim().toUpperCase();
+
+    if (currentCode && currentCode !== "PENDENTE" && !usedCodes.has(currentCode)) {
+      aluno.matricula = currentCode;
+      usedCodes.add(currentCode);
+      return;
+    }
+
+    aluno.matricula = buildDemoRegistrationCode("ALU", aluno.id, usedCodes);
+    usedCodes.add(aluno.matricula);
+  });
 }
 
 function ensureCollectionRegistrationCodes(items, prefix) {
@@ -1753,6 +1771,26 @@ function ensureCollectionRegistrationCodes(items, prefix) {
 function nextDemoRegistrationCode(items, prefix) {
   const usedCodes = new Set(items.map((item) => String(item.codigoRegistro || "").trim().toUpperCase()).filter(Boolean));
   return buildDemoRegistrationCode(prefix, nextId(items), usedCodes);
+}
+
+function nextDemoStudentRegistrationCode(db) {
+  const usedCodes = new Set(
+    db.alunos
+      .map((aluno) => String(aluno.matricula || "").trim().toUpperCase())
+      .filter((codigo) => codigo && codigo !== "PENDENTE")
+  );
+
+  return buildDemoRegistrationCode("ALU", nextId(db.alunos), usedCodes);
+}
+
+function ensureDemoStudentRegistrationCode(db, aluno) {
+  const currentCode = String(aluno?.matricula || "").trim();
+
+  if (currentCode && currentCode.toUpperCase() !== "PENDENTE") {
+    return;
+  }
+
+  aluno.matricula = nextDemoStudentRegistrationCode(db);
 }
 
 function buildDemoRegistrationCode(prefix, id, usedCodes) {

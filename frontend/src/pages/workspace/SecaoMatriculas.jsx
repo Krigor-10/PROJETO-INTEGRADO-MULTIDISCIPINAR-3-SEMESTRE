@@ -310,7 +310,7 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
 
   const colunasPendentesGestor = [
     { key: "selecionar", label: "Selecionar", render: renderSelecao },
-    { key: "codigoRegistro", label: "Codigo", render: (matricula) => matricula.codigoRegistro || "Sem codigo" },
+    { key: "codigoRegistro", label: "Solicitacao", render: (matricula) => matricula.codigoRegistro || "Sem solicitacao" },
     { key: "aluno", label: "Aluno" },
     { key: "curso", label: "Curso" },
     { key: "turma", label: "Turma" },
@@ -323,7 +323,7 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
   ];
 
   const colunasAprovadasGestor = [
-    { key: "codigoRegistro", label: "Codigo", render: (matricula) => matricula.codigoRegistro || "Sem codigo" },
+    { key: "codigoRegistro", label: "Solicitacao", render: (matricula) => matricula.codigoRegistro || "Sem solicitacao" },
     { key: "aluno", label: "Aluno" },
     { key: "curso", label: "Curso" },
     { key: "turma", label: "Turma" },
@@ -336,7 +336,7 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
   ];
 
   const colunasRejeitadasGestor = [
-    { key: "codigoRegistro", label: "Codigo", render: (matricula) => matricula.codigoRegistro || "Sem codigo" },
+    { key: "codigoRegistro", label: "Solicitacao", render: (matricula) => matricula.codigoRegistro || "Sem solicitacao" },
     { key: "aluno", label: "Aluno" },
     { key: "curso", label: "Curso" },
     { key: "turma", label: "Turma" },

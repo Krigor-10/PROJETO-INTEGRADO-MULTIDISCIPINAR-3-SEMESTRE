@@ -80,7 +80,7 @@ namespace PlataformaEnsino.API.Controllers
                     Bairro = dto.Bairro.Trim(),
                     Cidade = dto.Cidade.Trim(),
                     Estado = dto.Estado.Trim().ToUpper(),
-                    Matricula = "Pendente"
+                    Matricula = await GerarCodigoAlunoAsync()
                 };
                 aluno.ConfigurarAcesso("Aluno", BCrypt.Net.BCrypt.HashPassword(dto.Senha));
 
@@ -126,6 +126,21 @@ namespace PlataformaEnsino.API.Controllers
             }
 
             throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para a matricula.");
+        }
+
+        private async Task<string> GerarCodigoAlunoAsync()
+        {
+            for (var tentativa = 0; tentativa < 10; tentativa++)
+            {
+                var codigo = CodigoRegistroGenerator.GerarAluno();
+
+                if (!await _context.Alunos.AnyAsync(aluno => aluno.Matricula == codigo))
+                {
+                    return codigo;
+                }
+            }
+
+            throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o aluno.");
         }
 
         [Authorize]

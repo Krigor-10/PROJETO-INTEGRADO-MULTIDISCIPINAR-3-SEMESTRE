@@ -7,6 +7,8 @@ public static class CodigoRegistroGenerator
     private const string Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private const int CodeLength = 6;
 
+    public static string GerarAluno() => Gerar("ALU");
+
     public static string GerarCurso() => Gerar("CUR");
 
     public static string GerarModulo() => Gerar("MOD");

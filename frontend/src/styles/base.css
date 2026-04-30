@@ -178,6 +178,15 @@ textarea {
   backdrop-filter: blur(14px);
 }
 
+.button--danger {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent 48%),
+    linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+  border: 1px solid rgba(248, 113, 113, 0.42);
+  box-shadow: 0 14px 24px rgba(220, 38, 38, 0.2);
+  color: #fff7f7;
+}
+
 .button:hover:not(:disabled),
 .solid-button:hover:not(:disabled),
 .ghost-button:hover:not(:disabled) {
@@ -239,6 +248,11 @@ textarea {
 .inline-message--success {
   background: rgba(50, 201, 149, 0.12);
   color: #8ff1ca;
+}
+
+.inline-message--warning {
+  background: rgba(185, 146, 255, 0.14);
+  color: #dbc6ff;
 }
 
 .inline-message--error {
