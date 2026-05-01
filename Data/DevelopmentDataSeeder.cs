@@ -14,7 +14,7 @@ public static class DevelopmentDataSeeder
     private const string KrigorStudentEmail = "krigordesousa@gmail.com";
     private const string DefaultPassword = "Edtech@123";
     private const int AdditionalCoordinatorCount = 5;
-    private const int AdditionalProfessorCount = 5;
+    private const int AdditionalProfessorCount = 9;
     private const int AdditionalStudentCount = 20;
     private static readonly (string Title, string Description, decimal Price, string ModuleTitle)[] AdditionalCourseCatalog =
     {
@@ -52,8 +52,10 @@ public static class DevelopmentDataSeeder
         var student = await EnsureStudentAsync(context);
         var krigorStudent = await EnsureKrigorStudentAsync(context);
         var additionalCoordinators = await EnsureAdditionalCoordinatorsAsync(context);
-        await EnsureAdditionalProfessorsAsync(context);
+        var additionalProfessors = await EnsureAdditionalProfessorsAsync(context);
         var additionalStudents = await EnsureAdditionalStudentsAsync(context);
+        var professoresParaTurmas = new List<Professor> { professor };
+        professoresParaTurmas.AddRange(additionalProfessors);
 
         await context.SaveChangesAsync();
 
@@ -109,7 +111,12 @@ public static class DevelopmentDataSeeder
 
         await context.SaveChangesAsync();
 
-        var promptEngineeringCourse = await context.Cursos.FirstAsync(item => item.Titulo == AdditionalCourseCatalog[0].Title);
+        var additionalCourseTitles = AdditionalCourseCatalog.Select(item => item.Title).ToArray();
+        var additionalCourses = await context.Cursos
+            .Where(item => additionalCourseTitles.Contains(item.Titulo))
+            .ToListAsync();
+        var additionalCoursesByTitle = additionalCourses.ToDictionary(item => item.Titulo);
+        var promptEngineeringCourse = additionalCoursesByTitle[AdditionalCourseCatalog[0].Title];
 
         var fundamentosWebModule = await EnsureModuloAsync(context, "Fundamentos da Web Moderna", fullStackCourse.Id);
         await EnsureModuloAsync(context, "APIs e Integracao", fullStackCourse.Id);
@@ -117,8 +124,32 @@ public static class DevelopmentDataSeeder
 
         await context.SaveChangesAsync();
 
-        var fullStackClass = await EnsureTurmaAsync(context, "FS-2026-A", fullStackCourse.Id, professor.Id);
-        await EnsureTurmaAsync(context, "DATA-2026-A", dataCourse.Id, professor.Id);
+        var seededCoursesForClasses = new List<Curso>
+        {
+            fullStackCourse,
+            dataCourse,
+            uxCourse,
+            architectureCourse,
+            pythonCourse,
+            devOpsCourse
+        };
+        seededCoursesForClasses.AddRange(AdditionalCourseCatalog.Select(item => additionalCoursesByTitle[item.Title]));
+
+        Turma? fullStackClass = null;
+        var cursosComTurma = seededCoursesForClasses.DistinctBy(item => item.Id).ToList();
+        for (var index = 0; index < cursosComTurma.Count; index++)
+        {
+            var course = cursosComTurma[index];
+            var professorResponsavel = EscolherProfessorParaTurma(professoresParaTurmas, index);
+            var turma = await EnsureTurmaAsync(context, CriarNomeTurmaPadrao(course), course.Id, professorResponsavel.Id);
+
+            if (course.Id == fullStackCourse.Id)
+            {
+                fullStackClass = turma;
+            }
+        }
+
+        fullStackClass ??= await EnsureTurmaAsync(context, CriarNomeTurmaPadrao(fullStackCourse), fullStackCourse.Id, professor.Id);
 
         await context.SaveChangesAsync();
 
@@ -244,27 +275,34 @@ public static class DevelopmentDataSeeder
             specialty: "Full Stack e Dados");
     }
 
-    private static async Task EnsureAdditionalProfessorsAsync(PlataformaContext context)
+    private static async Task<List<Professor>> EnsureAdditionalProfessorsAsync(PlataformaContext context)
     {
         var specialties = new[]
         {
-            "Front-end e UX",
-            "Back-end e APIs",
-            "Dados e BI",
+            "Dados aplicados e BI",
+            "Pesquisa UX e produto digital",
+            "Arquitetura e microsservicos",
+            "Python e automacao de dados",
             "Cloud e DevOps",
-            "QA e Automacao"
+            "IA generativa e prompt design",
+            "Cyberseguranca aplicada",
+            "Mobile com React Native",
+            "QA e automacao de testes"
         };
+        var professores = new List<Professor>();
 
         for (var index = 1; index <= AdditionalProfessorCount; index++)
         {
-            await EnsureProfessorAsync(
+            professores.Add(await EnsureProfessorAsync(
                 context,
                 name: $"Professor Teste {index:00}",
                 email: $"professor.teste{index:00}@edtech.local",
                 cpf: $"{33400000000L + index:00000000000}",
                 phone: $"1166666{index:0000}",
-                specialty: specialties[index - 1]);
+                specialty: specialties[index - 1]));
         }
+
+        return professores;
     }
 
     private static async Task<Professor> EnsureProfessorAsync(
@@ -454,10 +492,19 @@ public static class DevelopmentDataSeeder
 
     private static async Task<Turma> EnsureTurmaAsync(PlataformaContext context, string name, int courseId, int professorId)
     {
-        var turma = await context.Turmas.FirstOrDefaultAsync(item => item.NomeTurma == name && item.CursoId == courseId);
+        var turmasDoCurso = await context.Turmas
+            .Where(item => item.CursoId == courseId)
+            .OrderBy(item => item.DataCriacao)
+            .ThenBy(item => item.Id)
+            .ToListAsync();
+        var turma = turmasDoCurso.FirstOrDefault();
 
         if (turma is not null)
         {
+            turma.NomeTurma = name;
+            turma.ProfessorId = professorId;
+
+            await ConsolidarTurmasDuplicadasAsync(context, turma, turmasDoCurso.Skip(1));
             await EnsureTurmaRegistrationCodeAsync(context, turma);
             return turma;
         }
@@ -472,6 +519,63 @@ public static class DevelopmentDataSeeder
         context.Turmas.Add(turma);
         await EnsureTurmaRegistrationCodeAsync(context, turma);
         return turma;
+    }
+
+    private static async Task ConsolidarTurmasDuplicadasAsync(
+        PlataformaContext context,
+        Turma turmaPadrao,
+        IEnumerable<Turma> turmasDuplicadas)
+    {
+        foreach (var turmaDuplicada in turmasDuplicadas)
+        {
+            var matriculas = await context.Matriculas
+                .Where(item => item.TurmaId == turmaDuplicada.Id)
+                .ToListAsync();
+            foreach (var matricula in matriculas)
+            {
+                matricula.VincularTurma(turmaPadrao.Id);
+            }
+
+            var conteudos = await context.ConteudosDidaticos
+                .Where(item => item.TurmaId == turmaDuplicada.Id)
+                .ToListAsync();
+            foreach (var conteudo in conteudos)
+            {
+                conteudo.TurmaId = turmaPadrao.Id;
+            }
+
+            var avaliacoes = await context.Avaliacoes
+                .Where(item => item.TurmaId == turmaDuplicada.Id)
+                .ToListAsync();
+            foreach (var avaliacao in avaliacoes)
+            {
+                avaliacao.TurmaId = turmaPadrao.Id;
+            }
+
+            context.Turmas.Remove(turmaDuplicada);
+        }
+    }
+
+    private static Professor EscolherProfessorParaTurma(IReadOnlyList<Professor> professores, int turmaIndex)
+    {
+        if (professores.Count == 0)
+        {
+            throw new InvalidOperationException("Nenhum professor disponivel para atribuir a turma padrao.");
+        }
+
+        return professores[turmaIndex % professores.Count];
+    }
+
+    private static string CriarNomeTurmaPadrao(Curso course)
+    {
+        var titulo = string.IsNullOrWhiteSpace(course.Titulo)
+            ? "Curso"
+            : course.Titulo.Trim();
+        var nome = $"Turma online - {titulo}";
+
+        return nome.Length <= 120
+            ? nome
+            : nome[..120].TrimEnd();
     }
 
     private static async Task EnsureTurmaRegistrationCodeAsync(PlataformaContext context, Turma turma)

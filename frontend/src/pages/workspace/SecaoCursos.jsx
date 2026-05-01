@@ -94,7 +94,7 @@ export function SecaoCursos({
         curso.descricao,
         coordenacao,
         `${resumo.modulos} modulos`,
-        `${resumo.turmas} turmas`,
+        resumo.turmas ? "turma padrao configurada" : "turma padrao pendente",
         `${resumo.matriculas} matriculas`
       ];
 
@@ -323,7 +323,7 @@ export function SecaoCursos({
 
   const colunas = [
     ...(ehAdmin ? [{ key: "selecionar", label: "Selecionar", render: renderSelecao }] : []),
-    { key: "codigoRegistro", label: "Registro", render: (curso) => curso.codigoRegistro || "Sem codigo" },
+    { key: "codigoRegistro", label: "CODIGO DO CURSO", render: (curso) => curso.codigoRegistro || "Sem codigo" },
     { key: "titulo", label: "Titulo" },
     { key: "descricao", label: "Descricao", render: (curso) => compactText(curso.descricao, 90) },
     {
@@ -337,7 +337,7 @@ export function SecaoCursos({
             <strong>Fluxo do curso</strong>
             <div className="table-badge-list">
               <span className="chip">{resumo.modulos} modulo{resumo.modulos === 1 ? "" : "s"}</span>
-              <span className="chip">{resumo.turmas} turma{resumo.turmas === 1 ? "" : "s"}</span>
+              <span className="chip">{resumo.turmas ? "Turma padrao configurada" : "Turma padrao pendente"}</span>
               <span className="chip">{resumo.matriculas} matricula{resumo.matriculas === 1 ? "" : "s"}</span>
             </div>
           </div>
@@ -365,7 +365,7 @@ export function SecaoCursos({
               </button>
             ) : null}
             <button className="table-action" onClick={() => abrirSecaoRelacionada("turmas", curso)} type="button">
-              Ver turmas
+              Ver turma padrao
             </button>
           </div>
         </div>
@@ -377,9 +377,9 @@ export function SecaoCursos({
     <PanelCard
       description={
         ehCoordenador
-          ? "Cursos ativos vinculados a sua coordenacao, com leitura direta de modulos, turmas e matriculas."
+          ? "Cursos ativos vinculados a sua coordenacao, com leitura direta de modulos, turma padrao e matriculas."
           : ehAdmin
-          ? "Selecione cursos, atribua coordenacao em lote e use cada linha como ponto de partida para modulos e turmas."
+          ? "Selecione cursos, atribua coordenacao em lote e use cada linha como ponto de partida para modulos e turma padrao."
           : "Catalogo de cursos reutilizado na home publica e no ambiente autenticado."
       }
       title="Cursos ativos"

@@ -706,7 +706,7 @@ export function SecaoModulos({
         >
           <div className="module-detail-grid">
             <article className="module-detail-card">
-              <span>Codigo de registro</span>
+              <span>Codigo do modulo</span>
               <strong>{moduloDetalhado.codigoRegistro || "Sem codigo"}</strong>
             </article>
             <article className="module-detail-card">
@@ -751,7 +751,7 @@ export function SecaoModulos({
         <DataTable
           columns={[
             { key: "selecionar", label: "Selecionar", render: renderSelecaoModulo },
-            { key: "codigoRegistro", label: "Registro", render: (row) => row.codigoRegistro || "Sem codigo" },
+            { key: "codigoRegistro", label: "CODIGO DO MODULO", render: (row) => row.codigoRegistro || "Sem codigo" },
             { key: "titulo", label: "Modulo" },
             {
               key: "cursoId",

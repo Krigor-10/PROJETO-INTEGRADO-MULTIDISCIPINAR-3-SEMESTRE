@@ -121,6 +121,40 @@ public class MatriculaService : IMatriculaService
         await _matriculaRepository.SalvarAlteracoesAsync();
     }
 
+    public async Task<AprovacaoMatriculasLoteResultadoDto> AprovarMatriculasAutomaticamenteAsync(IEnumerable<int> matriculaIds)
+    {
+        var ids = matriculaIds
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+
+        if (ids.Count == 0)
+        {
+            throw new ArgumentException("Selecione ao menos uma matricula pendente para aprovacao em lote.");
+        }
+
+        var resultado = new AprovacaoMatriculasLoteResultadoDto
+        {
+            TotalSolicitado = ids.Count
+        };
+
+        foreach (var id in ids)
+        {
+            try
+            {
+                var aprovada = await AprovarMatriculaAutomaticamenteCoreAsync(id);
+                await _matriculaRepository.SalvarAlteracoesAsync();
+                resultado.Aprovadas.Add(aprovada);
+            }
+            catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or ArgumentException)
+            {
+                resultado.Erros.Add(await CriarErroAprovacaoAsync(id, ex.Message));
+            }
+        }
+
+        return resultado;
+    }
+
     public async Task RejeitarMatriculaAsync(int matriculaId)
     {
         var matricula = await _matriculaRepository.ObterPorIdAsync(matriculaId)
@@ -185,5 +219,106 @@ public class MatriculaService : IMatriculaService
         }
 
         throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o aluno.");
+    }
+
+    private async Task<AprovacaoMatriculaItemDto> AprovarMatriculaAutomaticamenteCoreAsync(int matriculaId)
+    {
+        var matricula = await _context.Matriculas
+            .Include(m => m.Aluno)
+            .FirstOrDefaultAsync(m => m.Id == matriculaId)
+            ?? throw new KeyNotFoundException("Matricula nao encontrada.");
+
+        if (matricula.Status != StatusMatricula.Pendente)
+        {
+            throw new InvalidOperationException("Apenas matriculas pendentes podem ser aprovadas.");
+        }
+
+        var aluno = matricula.Aluno
+            ?? await _alunoRepository.ObterPorIdAsync(matricula.AlunoId)
+            ?? throw new KeyNotFoundException("Aluno nao encontrado.");
+
+        var turma = await ResolverTurmaAutomaticaAsync(matricula);
+        await GarantirAlunoSemMatriculaAtivaNaTurmaAsync(matricula, turma);
+
+        if (string.IsNullOrWhiteSpace(matricula.CodigoRegistro))
+        {
+            matricula.CodigoRegistro = await GerarCodigoMatriculaAsync();
+        }
+
+        matricula.AprovarComTurma(turma.Id, turma.CursoId);
+        await GarantirCodigoAlunoAsync(aluno);
+        aluno.TurmaAtual = turma.NomeTurma;
+
+        return new AprovacaoMatriculaItemDto
+        {
+            MatriculaId = matricula.Id,
+            CodigoRegistro = matricula.CodigoRegistro,
+            CursoId = matricula.CursoId,
+            TurmaId = turma.Id,
+            NomeTurma = turma.NomeTurma
+        };
+    }
+
+    private async Task<Turma> ResolverTurmaAutomaticaAsync(Matricula matricula)
+    {
+        Turma? turma;
+
+        if (matricula.TurmaId.HasValue)
+        {
+            turma = await _turmaRepository.ObterPorIdAsync(matricula.TurmaId.Value)
+                ?? throw new KeyNotFoundException("Turma nao encontrada.");
+        }
+        else
+        {
+            turma = await _context.Turmas
+                .Where(item => item.CursoId == matricula.CursoId)
+                .OrderBy(item => item.DataCriacao)
+                .ThenBy(item => item.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        if (turma is null)
+        {
+            throw new InvalidOperationException("Nao ha turma padrao cadastrada para o curso solicitado.");
+        }
+
+        if (matricula.CursoId != turma.CursoId)
+        {
+            throw new InvalidOperationException("A turma selecionada nao pertence ao curso solicitado pelo aluno.");
+        }
+
+        return turma;
+    }
+
+    private async Task GarantirAlunoSemMatriculaAtivaNaTurmaAsync(Matricula matricula, Turma turma)
+    {
+        var jaPossuiMatricula = await _context.Matriculas.AnyAsync(item =>
+            item.Id != matricula.Id &&
+            item.AlunoId == matricula.AlunoId &&
+            item.TurmaId == turma.Id &&
+            item.Status != StatusMatricula.Rejeitada &&
+            item.Status != StatusMatricula.Cancelada);
+
+        if (jaPossuiMatricula)
+        {
+            throw new InvalidOperationException("O aluno ja possui matricula ativa nesta turma.");
+        }
+    }
+
+    private async Task<AprovacaoMatriculaErroDto> CriarErroAprovacaoAsync(int matriculaId, string motivo)
+    {
+        var matricula = await _context.Matriculas
+            .AsNoTracking()
+            .Include(m => m.Aluno)
+            .FirstOrDefaultAsync(m => m.Id == matriculaId);
+
+        return new AprovacaoMatriculaErroDto
+        {
+            MatriculaId = matriculaId,
+            CodigoRegistro = matricula?.CodigoRegistro ?? string.Empty,
+            NomeAluno = matricula?.Aluno?.Nome ?? string.Empty,
+            CursoId = matricula?.CursoId ?? 0,
+            Motivo = motivo
+        };
     }
 }

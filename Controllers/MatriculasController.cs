@@ -78,6 +78,14 @@ public class MatriculasController : ControllerBase
         return Ok(new { mensagem = "Matrícula aprovada com sucesso." });
     }
 
+    [HttpPut("aprovar-lote")]
+    [Authorize(Roles = "Admin,Coordenador")]
+    public async Task<IActionResult> AprovarLote([FromBody] AprovarMatriculasLoteRequestDto request)
+    {
+        var resultado = await _matriculaService.AprovarMatriculasAutomaticamenteAsync(request?.MatriculaIds ?? []);
+        return Ok(resultado);
+    }
+
     [HttpPut("{id:int}/rejeitar")]
     [Authorize(Roles = "Admin,Coordenador")]
     public async Task<IActionResult> Rejeitar(int id)

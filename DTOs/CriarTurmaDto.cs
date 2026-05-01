@@ -4,9 +4,8 @@ namespace PlataformaEnsino.API.DTOs;
 
 public class CriarTurmaDto
 {
-    [Required(ErrorMessage = "O nome da turma é obrigatório.")]
     [StringLength(120)]
-    public string NomeTurma { get; set; } = string.Empty;
+    public string? NomeTurma { get; set; }
 
     [Required(ErrorMessage = "O curso é obrigatório.")]
     public int CursoId { get; set; }

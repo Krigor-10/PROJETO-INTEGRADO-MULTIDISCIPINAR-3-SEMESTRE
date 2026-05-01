@@ -66,6 +66,8 @@ export async function demoRequest(endpoint, options = {}) {
       return listPendingEnrollments();
     case /^\/Matriculas\/aluno\/\d+$/.test(path) && method === "GET":
       return listStudentEnrollments(getNumericId(path));
+    case path === "/Matriculas/aprovar-lote" && method === "PUT":
+      return approveEnrollmentsBatch(payload);
     case /^\/Matriculas\/\d+\/aprovar$/.test(path) && method === "PUT":
       return approveEnrollment(getEnrollmentActionId(path), payload);
     case /^\/Matriculas\/\d+\/rejeitar$/.test(path) && method === "PUT":
@@ -369,23 +371,24 @@ function listTeacherClasses() {
     .sort((left, right) => left.nomeTurma.localeCompare(right.nomeTurma, "pt-BR"));
 }
 
+function buildDefaultClassName(curso) {
+  const titulo = String(curso?.titulo || "").trim();
+  const nome = titulo ? `Turma online - ${titulo}` : "Turma online";
+  return nome.length <= 120 ? nome : nome.slice(0, 120).trimEnd();
+}
+
 function createClass(payload) {
   requireManager();
 
-  const nomeTurma = String(payload.nomeTurma || "").trim();
   const cursoId = Number(payload.cursoId);
   const professorId = Number(payload.professorId);
 
-  if (!nomeTurma) {
-    throw new DemoApiError("Informe um nome para criar a turma.", 400);
-  }
-
   if (!cursoId) {
-    throw new DemoApiError("Selecione um curso demo para criar a turma.", 400);
+    throw new DemoApiError("Selecione um curso demo para criar a turma padrao.", 400);
   }
 
   if (!professorId) {
-    throw new DemoApiError("Selecione um professor demo para criar a turma.", 400);
+    throw new DemoApiError("Selecione um professor demo para criar a turma padrao.", 400);
   }
 
   const db = readDemoDb();
@@ -399,13 +402,12 @@ function createClass(payload) {
     throw new DemoApiError("Professor demo nao encontrado.", 404);
   }
 
-  const turmaDuplicada = db.turmas.some(
-    (item) => item.cursoId === cursoId && String(item.nomeTurma || "").trim().toLowerCase() === nomeTurma.toLowerCase()
-  );
-  if (turmaDuplicada) {
-    throw new DemoApiError(`Ja existe uma turma demo chamada "${nomeTurma}" para esse curso.`, 409);
+  const turmaPadraoExistente = db.turmas.find((item) => item.cursoId === cursoId);
+  if (turmaPadraoExistente) {
+    throw new DemoApiError("Este curso demo ja possui uma turma padrao.", 409);
   }
 
+  const nomeTurma = buildDefaultClassName(curso);
   const turma = {
     id: nextId(db.turmas),
     codigoRegistro: nextDemoRegistrationCode(db.turmas, "TUR"),
@@ -564,18 +566,69 @@ function approveEnrollment(enrollmentId, turmaIdPayload) {
   }
 
   const db = readDemoDb();
+  approveEnrollmentInDb(db, enrollmentId, turmaId);
+  saveDemoDb(db);
+  return { mensagem: "Matricula demo aprovada com sucesso." };
+}
+
+function approveEnrollmentsBatch(payload) {
+  requireManager();
+
+  const db = readDemoDb();
+  const ids = Array.isArray(payload?.matriculaIds)
+    ? [...new Set(payload.matriculaIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))]
+    : [];
+
+  if (!ids.length) {
+    throw new DemoApiError("Selecione ao menos uma matricula pendente para aprovacao em lote.", 400);
+  }
+
+  const resultado = {
+    totalSolicitado: ids.length,
+    aprovadas: [],
+    erros: []
+  };
+
+  ids.forEach((id) => {
+    try {
+      resultado.aprovadas.push(approveEnrollmentInDb(db, id));
+    } catch (error) {
+      resultado.erros.push(buildEnrollmentApprovalError(db, id, error.message || "Nao foi possivel aprovar a matricula demo."));
+    }
+  });
+
+  if (resultado.aprovadas.length) {
+    saveDemoDb(db);
+  }
+
+  return {
+    ...resultado,
+    totalAprovado: resultado.aprovadas.length,
+    totalComErro: resultado.erros.length
+  };
+}
+
+function approveEnrollmentInDb(db, enrollmentId, turmaIdOverride = null) {
   const matricula = db.matriculas.find((item) => item.id === enrollmentId);
   if (!matricula) {
     throw new DemoApiError("Matricula demo nao encontrada.", 404);
   }
 
-  const turma = db.turmas.find((item) => item.id === turmaId);
-  if (!turma) {
-    throw new DemoApiError("Turma demo nao encontrada.", 404);
+  if (Number(matricula.status) !== 0) {
+    throw new DemoApiError("Apenas matriculas pendentes podem ser aprovadas.", 422);
   }
 
-  if (matricula.cursoId !== turma.cursoId) {
-    throw new DemoApiError("A turma demo selecionada nao pertence ao curso solicitado pelo aluno.", 422);
+  const turma = resolveDemoEnrollmentClass(db, matricula, turmaIdOverride);
+  const duplicatedEnrollment = db.matriculas.some(
+    (item) =>
+      item.id !== matricula.id &&
+      item.alunoId === matricula.alunoId &&
+      item.turmaId === turma.id &&
+      ![2, 3].includes(Number(item.status))
+  );
+
+  if (duplicatedEnrollment) {
+    throw new DemoApiError("O aluno ja possui matricula ativa nesta turma.", 422);
   }
 
   const aluno = db.alunos.find((item) => item.id === matricula.alunoId);
@@ -585,14 +638,56 @@ function approveEnrollment(enrollmentId, turmaIdPayload) {
   }
 
   matricula.turmaId = turma.id;
+  matricula.cursoId = turma.cursoId;
   matricula.status = 1;
   if (aluno) {
     ensureDemoStudentRegistrationCode(db, aluno);
     aluno.turmaAtual = turma.nomeTurma;
   }
 
-  saveDemoDb(db);
-  return { mensagem: "Matricula demo aprovada com sucesso." };
+  return {
+    matriculaId: matricula.id,
+    codigoRegistro: matricula.codigoRegistro || "",
+    cursoId: matricula.cursoId,
+    turmaId: turma.id,
+    nomeTurma: turma.nomeTurma || ""
+  };
+}
+
+function resolveDemoEnrollmentClass(db, matricula, turmaIdOverride = null) {
+  const turmaId = turmaIdOverride || matricula.turmaId || null;
+  const turma = turmaId
+    ? db.turmas.find((item) => item.id === Number(turmaId))
+    : [...db.turmas]
+        .filter((item) => item.cursoId === matricula.cursoId)
+        .sort((left, right) => {
+          const leftDate = new Date(left.dataCriacao || 0).getTime();
+          const rightDate = new Date(right.dataCriacao || 0).getTime();
+          return leftDate - rightDate || left.id - right.id;
+        })[0] || null;
+
+  if (!turma) {
+    throw new DemoApiError("Nao ha turma padrao demo cadastrada para o curso solicitado.", 422);
+  }
+
+  if (matricula.cursoId !== turma.cursoId) {
+    throw new DemoApiError("A turma demo selecionada nao pertence ao curso solicitado pelo aluno.", 422);
+  }
+
+  return turma;
+}
+
+function buildEnrollmentApprovalError(db, enrollmentId, motivo) {
+  const matricula = db.matriculas.find((item) => item.id === enrollmentId);
+  const aluno = matricula ? db.alunos.find((item) => item.id === matricula.alunoId) : null;
+
+  return {
+    matriculaId: enrollmentId,
+    codigoRegistro: matricula?.codigoRegistro || "",
+    nomeAluno: aluno?.nome || "",
+    cursoId: matricula?.cursoId || 0,
+    motivo
+  };
 }
 
 function rejectEnrollment(enrollmentId) {
@@ -2122,13 +2217,45 @@ function createInitialDemoDb() {
         email: "marcio@prof.demo",
         especialidade: "SQL aplicado e modelagem de dados",
         cpf: "65498732100"
+      },
+      {
+        id: 303,
+        codigoRegistro: "PROF-1UMQY9",
+        nome: "Sofia Andrade",
+        email: "sofia@prof.demo",
+        especialidade: "UX research e produto digital",
+        cpf: "32165498700"
+      },
+      {
+        id: 304,
+        codigoRegistro: "PROF-1V4L2K",
+        nome: "Thiago Nunes",
+        email: "thiago@prof.demo",
+        especialidade: "Cloud, DevOps e operacoes",
+        cpf: "74185296300"
+      },
+      {
+        id: 305,
+        codigoRegistro: "PROF-1VCC53",
+        nome: "Patricia Gomes",
+        email: "patricia@prof.demo",
+        especialidade: "IA aplicada e automacoes",
+        cpf: "85296374100"
+      },
+      {
+        id: 306,
+        codigoRegistro: "PROF-1VK3DO",
+        nome: "Rafael Costa",
+        email: "rafael@prof.demo",
+        especialidade: "QA e automacao de testes",
+        cpf: "96374185200"
       }
     ],
     turmas: [
       {
         id: 401,
         codigoRegistro: "TUR-30Q10H",
-        nomeTurma: "Programacao Aplicada - Turma A",
+        nomeTurma: "Turma online - Programacao Aplicada",
         cursoId: 1,
         professorId: 301,
         dataCriacao: "2026-03-04T10:00:00.000Z"
@@ -2136,7 +2263,7 @@ function createInitialDemoDb() {
       {
         id: 402,
         codigoRegistro: "TUR-30WHEW",
-        nomeTurma: "Banco de Dados - Turma A",
+        nomeTurma: "Turma online - Banco de Dados",
         cursoId: 2,
         professorId: 302,
         dataCriacao: "2026-03-06T11:00:00.000Z"
@@ -2144,7 +2271,7 @@ function createInitialDemoDb() {
       {
         id: 403,
         codigoRegistro: "TUR-3125DB",
-        nomeTurma: "Analise de Dados - Turma Noturna",
+        nomeTurma: "Turma online - Analise de Dados",
         cursoId: 3,
         professorId: 301,
         dataCriacao: "2026-03-10T19:00:00.000Z"

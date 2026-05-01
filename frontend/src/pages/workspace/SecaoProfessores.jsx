@@ -641,7 +641,11 @@ export function SecaoProfessores({ cursos = [], onRefresh, onSessionExpired, pro
 
       <DataTable
         columns={[
-          { key: "codigoRegistro", label: "MATRICULA", render: (professor) => professor.codigoRegistro || "Sem matricula" },
+          {
+            key: "codigoRegistro",
+            label: "REGISTRO DO PROFESSOR",
+            render: (professor) => professor.codigoRegistro || "Sem registro"
+          },
           { key: "nome", label: "Nome" },
           { key: "email", label: "E-mail" },
           {

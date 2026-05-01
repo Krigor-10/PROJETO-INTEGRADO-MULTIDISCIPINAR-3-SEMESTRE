@@ -3,29 +3,11 @@ import { DataTable, InlineMessage, PanelCard, StatusPill } from "../../component
 import { ApiError, apiRequest } from "../../lib/api.js";
 import { formatDate, formatGrade, statusTone } from "../../lib/format.js";
 
-export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessionExpired, turmas = [] }) {
+export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessionExpired }) {
   const [mensagem, setMensagem] = useState({ tone: "info", message: "" });
   const [processandoLote, setProcessandoLote] = useState(false);
   const [matriculasSelecionadas, setMatriculasSelecionadas] = useState(() => new Set());
   const [visualizacaoGestor, setVisualizacaoGestor] = useState("pendentes");
-  const [turmaSelecionada, setTurmaSelecionada] = useState("");
-
-  const turmasPorCurso = useMemo(() => {
-    const mapa = new Map();
-
-    turmas.forEach((turma) => {
-      const cursoId = Number(turma.cursoId);
-      const lista = mapa.get(cursoId) || [];
-      lista.push(turma);
-      mapa.set(cursoId, lista);
-    });
-
-    mapa.forEach((lista) => {
-      lista.sort((left, right) => String(left.nomeTurma || "").localeCompare(String(right.nomeTurma || ""), "pt-BR"));
-    });
-
-    return mapa;
-  }, [turmas]);
 
   const matriculasPendentes = useMemo(
     () => linhasMatriculas.filter((matricula) => matricula.status === "Pendente"),
@@ -57,21 +39,6 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
     [linhasMatriculas, matriculasSelecionadas]
   );
 
-  const cursosSelecionados = useMemo(
-    () => [...new Set(matriculasPendentesSelecionadas.map((matricula) => Number(matricula.cursoId)))],
-    [matriculasPendentesSelecionadas]
-  );
-
-  const cursoSelecionadoUnico = cursosSelecionados.length === 1 ? cursosSelecionados[0] : null;
-
-  const turmasDisponiveisParaLote = useMemo(() => {
-    if (!cursoSelecionadoUnico) {
-      return [];
-    }
-
-    return turmasPorCurso.get(cursoSelecionadoUnico) || [];
-  }, [cursoSelecionadoUnico, turmasPorCurso]);
-
   const todasPendentesSelecionadas =
     matriculasPendentes.length > 0 && matriculasPendentes.every((matricula) => matriculasSelecionadas.has(matricula.id));
   const quantidadeSelecionada = matriculasPendentesSelecionadas.length;
@@ -84,35 +51,29 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
   }, [idsPendentes]);
 
   useEffect(() => {
-    if (!turmaSelecionada) {
-      return;
-    }
-
-    const turmaAindaValida = turmasDisponiveisParaLote.some((turma) => String(turma.id) === String(turmaSelecionada));
-    if (!turmaAindaValida) {
-      setTurmaSelecionada("");
-    }
-  }, [turmaSelecionada, turmasDisponiveisParaLote]);
-
-  useEffect(() => {
     if (ehAluno || mostrandoPendentes) {
       return;
     }
 
     setMatriculasSelecionadas(new Set());
-    setTurmaSelecionada("");
     setMensagem({ tone: "info", message: "" });
   }, [ehAluno, mostrandoPendentes]);
 
-  async function executarLote(acao, mensagemSucesso) {
+  async function executarLote(acao, resolverFeedback) {
     try {
       setMensagem({ tone: "info", message: "" });
       setProcessandoLote(true);
 
-      await acao();
-      setMensagem({ tone: "success", message: mensagemSucesso });
-      setMatriculasSelecionadas(new Set());
-      setTurmaSelecionada("");
+      const resultado = await acao();
+      const feedback =
+        typeof resolverFeedback === "function"
+          ? resolverFeedback(resultado)
+          : { tone: "success", message: resolverFeedback };
+
+      setMensagem(feedback);
+      if (feedback.tone !== "error") {
+        setMatriculasSelecionadas(new Set());
+      }
       onRefresh?.();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -126,31 +87,57 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
     }
   }
 
+  function montarFeedbackAprovacao(resultado) {
+    const aprovadas = Number(resultado?.totalAprovado ?? resultado?.aprovadas?.length ?? 0);
+    const erros = Array.isArray(resultado?.erros) ? resultado.erros : [];
+    const resumoErros = erros
+      .slice(0, 3)
+      .map((erro) => {
+        const rotulo = erro.nomeAluno || erro.codigoRegistro || `Matricula #${erro.matriculaId}`;
+        return erro.motivo ? `${rotulo} (${erro.motivo})` : rotulo;
+      })
+      .join(", ");
+    const complementoErros =
+      erros.length > 3 ? ` e mais ${erros.length - 3}` : "";
+
+    if (aprovadas > 0 && erros.length > 0) {
+      return {
+        tone: "warning",
+        message: `${aprovadas} matricula${aprovadas > 1 ? "s aprovadas" : " aprovada"}. ${erros.length} nao ${erros.length > 1 ? "foram aprovadas" : "foi aprovada"}: ${resumoErros}${complementoErros}.`
+      };
+    }
+
+    if (aprovadas > 0) {
+      return {
+        tone: "success",
+        message: `${aprovadas} matricula${aprovadas > 1 ? "s aprovadas" : " aprovada"} automaticamente com sucesso.`
+      };
+    }
+
+    if (erros.length > 0) {
+      return {
+        tone: "error",
+        message: `Nenhuma matricula foi aprovada. Verifique turma padrao cadastrada para: ${resumoErros}${complementoErros}.`
+      };
+    }
+
+    return { tone: "info", message: "Nenhuma matricula pendente foi alterada." };
+  }
+
   async function aprovarSelecionadas() {
     if (!quantidadeSelecionada) {
       setMensagem({ tone: "error", message: "Selecione ao menos uma matricula pendente." });
       return;
     }
 
-    if (cursosSelecionados.length !== 1) {
-      setMensagem({ tone: "error", message: "Para aprovar em lote, selecione matriculas do mesmo curso." });
-      return;
-    }
-
-    const turmaId = Number(turmaSelecionada);
-    if (!turmaId) {
-      setMensagem({ tone: "error", message: "Selecione uma turma para aprovar o lote." });
-      return;
-    }
-
     await executarLote(async () => {
-      for (const matricula of matriculasPendentesSelecionadas) {
-        await apiRequest(`/Matriculas/${matricula.id}/aprovar`, {
-          method: "PUT",
-          body: JSON.stringify(turmaId)
-        });
-      }
-    }, `${quantidadeSelecionada} matricula${quantidadeSelecionada > 1 ? "s aprovadas" : " aprovada"} com sucesso.`);
+      return apiRequest("/Matriculas/aprovar-lote", {
+        method: "PUT",
+        body: JSON.stringify({
+          matriculaIds: matriculasPendentesSelecionadas.map((matricula) => matricula.id)
+        })
+      });
+    }, montarFeedbackAprovacao);
   }
 
   async function rejeitarSelecionadas() {
@@ -222,15 +209,6 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
       return null;
     }
 
-    const rotuloTurma =
-      quantidadeSelecionada === 0
-        ? "Selecione alunos pendentes"
-        : cursosSelecionados.length > 1
-        ? "Escolha um curso por vez"
-        : turmasDisponiveisParaLote.length
-        ? "Selecionar turma"
-        : "Sem turma disponivel";
-
     return (
       <div className="table-toolbar table-toolbar--matriculas">
         <div className="table-view-toggle" aria-label="Visualizacao de matriculas">
@@ -268,20 +246,6 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
             />
             <span>Selecionar alunos pendentes</span>
           </label>
-          <select
-            aria-label="Turma para aprovacao em lote"
-            className="table-inline-select table-inline-select--bulk"
-            disabled={processandoLote || quantidadeSelecionada === 0 || cursosSelecionados.length !== 1 || !turmasDisponiveisParaLote.length}
-            onChange={(event) => setTurmaSelecionada(event.target.value)}
-            value={turmaSelecionada}
-          >
-            <option value="">{rotuloTurma}</option>
-            {turmasDisponiveisParaLote.map((turma) => (
-              <option key={turma.id} value={turma.id}>
-                {turma.nomeTurma}
-              </option>
-            ))}
-          </select>
           <button className="table-action" disabled={processandoLote} onClick={aprovarSelecionadas} type="button">
             {processandoLote ? "Processando..." : "Aprovar selecionadas"}
           </button>
@@ -310,10 +274,14 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
 
   const colunasPendentesGestor = [
     { key: "selecionar", label: "Selecionar", render: renderSelecao },
-    { key: "codigoRegistro", label: "Solicitacao", render: (matricula) => matricula.codigoRegistro || "Sem solicitacao" },
+    {
+      key: "codigoRegistro",
+      label: "PROTOCOLO DA SOLICITACAO",
+      render: (matricula) => matricula.codigoRegistro || "Sem protocolo"
+    },
     { key: "aluno", label: "Aluno" },
     { key: "curso", label: "Curso" },
-    { key: "turma", label: "Turma" },
+    { key: "turma", label: "Turma padrao" },
     {
       key: "status",
       label: "Status",
@@ -323,10 +291,14 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
   ];
 
   const colunasAprovadasGestor = [
-    { key: "codigoRegistro", label: "Solicitacao", render: (matricula) => matricula.codigoRegistro || "Sem solicitacao" },
+    {
+      key: "codigoRegistro",
+      label: "PROTOCOLO DA SOLICITACAO",
+      render: (matricula) => matricula.codigoRegistro || "Sem protocolo"
+    },
     { key: "aluno", label: "Aluno" },
     { key: "curso", label: "Curso" },
-    { key: "turma", label: "Turma" },
+    { key: "turma", label: "Turma padrao" },
     {
       key: "status",
       label: "Status",
@@ -336,10 +308,14 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
   ];
 
   const colunasRejeitadasGestor = [
-    { key: "codigoRegistro", label: "Solicitacao", render: (matricula) => matricula.codigoRegistro || "Sem solicitacao" },
+    {
+      key: "codigoRegistro",
+      label: "PROTOCOLO DA SOLICITACAO",
+      render: (matricula) => matricula.codigoRegistro || "Sem protocolo"
+    },
     { key: "aluno", label: "Aluno" },
     { key: "curso", label: "Curso" },
-    { key: "turma", label: "Turma" },
+    { key: "turma", label: "Turma padrao" },
     {
       key: "status",
       label: "Status",
@@ -370,7 +346,7 @@ export function SecaoMatriculas({ ehAluno, linhasMatriculas, onRefresh, onSessio
           ehAluno
             ? [
                 { key: "curso", label: "Curso" },
-                { key: "turma", label: "Turma" },
+                { key: "turma", label: "Turma padrao" },
                 {
                   key: "status",
                   label: "Status",

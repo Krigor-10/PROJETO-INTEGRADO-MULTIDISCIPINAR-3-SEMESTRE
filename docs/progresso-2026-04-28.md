@@ -1,6 +1,6 @@
 # Progresso - 2026-04-28
 
-Base de retomada: `docs/progresso-2026-04-25.md`
+Base de retomada: `docs/progresso-2026-04-28.md`
 
 ## Contexto recuperado
 
@@ -183,6 +183,10 @@ Base de retomada: `docs/progresso-2026-04-25.md`
 - No modo demo, a mesma regra foi espelhada: alunos recebem codigo `ALU-*`, enquanto matriculas/solicitacoes continuam com codigo `MAT-*`.
 
 - Na tela de `Matriculas` do ADMIN, a coluna de `Codigo` foi renomeada para `Solicitacao`, reduzindo a confusao quando o mesmo aluno possui varios cursos pendentes.
+- Labels das tabelas administrativas atualizados para nomenclatura semantica, sem alterar banco ou contratos da API:
+  `REGISTRO DO ALUNO`, `PROTOCOLO DA SOLICITACAO`, `REGISTRO DO PROFESSOR`, `CODIGO DO CURSO`, `CODIGO DA TURMA` e `CODIGO DO MODULO`.
+
+- O detalhe lateral de modulos tambem passou a exibir `Codigo do modulo`, mantendo consistencia com a tabela.
 
 ## Validacao - 2026-04-30
 
@@ -222,12 +226,13 @@ Base de retomada: `docs/progresso-2026-04-25.md`
 - Startup em Development executado via DLL Release em `http://127.0.0.1:5015`, reaplicando o seed no LocalDB.
 
 - LocalDB confirmou `Krigor Sousa` com 1 codigo de aluno (`ALU-KRIGOR`) e 3 solicitacoes pendentes de curso (`MAT-*`) preservadas para teste do fluxo.
+- Frontend recompilado com sucesso apos renomear os labels administrativos para nomenclatura semantica:
+
+  `C:\Users\Krigor\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe .\node_modules\vite\bin\vite.js build`
 
 ## Proximos pontos sugeridos
 
 - Continuar a preparacao visual para demonstracao revisando as principais telas com a aplicacao aberta no navegador.
-
-- Proximo ajuste visual aprovado para antes de novas mudancas estruturais: renomear os labels das tabelas para termos mais semanticos, por exemplo `REGISTRO DO ALUNO`, `PROTOCOLO DA SOLICITACAO`, `REGISTRO DO PROFESSOR`, `CODIGO DO CURSO`, `CODIGO DA TURMA` e `CODIGO DO MODULO`, sem migration neste primeiro momento.
 - Avaliar se as descricoes visuais em cards e secoes devem ser removidas ou escondidas em telas operacionais para reduzir poluicao da interface.
 - Analisar se o modo demo esta equivalente ao projeto real em funcionalidades e interatividade, mapeando diferencas entre `demoApi.js` e os endpoints/regras do backend.
 - Expandir confirmacoes/feedbacks para outros pontos de `Cancelar` e `Deslogar` que ainda fechem popups ou descartem formularios sem aviso.
@@ -236,3 +241,93 @@ Base de retomada: `docs/progresso-2026-04-25.md`
 - Acompanhar o tratamento de `dataAbertura`/`dataFechamento` das avaliacoes em smoke test real para confirmar que o parsing UTC resolveu o desvio visual.
 - Aplicar media queries, font stack, adaptar tela para impressão, Switch modo escuro
 - Aluno ao se cadastrar, enviar um e-mail com senha de acesso, ou SMS via celular, o que for mais facil de implementar
+
+## Implementação para esta retomada 01/05/2026
+
+- eu quero que ao selecionar os alunos pendentes, poder fazer aprovação em massa e assim respectivamente atribuir autmaticamente cada aluno a turma escolhida no cadastro, sem precisar
+ficar escolhendo cada curso para cada aluno, quero aprovação em massa e o sistema atribui nas turmas automatico.
+- media queries, font stack, adaptar tela para impressão, Switch modo escuro.
+- Aluno ao se cadastrar, enviar um e-mail com senha de acesso, ou SMS via celular, o que for mais facil de implementar.
+-  Proximo passo estrutural: normalizar endereco de `Usuario` em tabela propria.
+
+## Implementado - 2026-05-01 - Aprovacao em lote automatica
+
+- A tela administrativa de `Matriculas` deixou de exigir escolha manual de turma para aprovar pendencias em lote.
+- O admin/coordenador agora seleciona varios alunos pendentes, inclusive de cursos diferentes, e usa `Aprovar selecionadas`.
+- Criado o endpoint real `PUT /api/Matriculas/aprovar-lote`, recebendo a lista de matriculas e retornando aprovadas e erros por item.
+- A regra de aprovacao automatica usa a turma ja vinculada a matricula quando existir; quando a solicitacao veio apenas com curso, seleciona a primeira turma cadastrada daquele curso por data de criacao/id.
+- Quando nao existe turma cadastrada para o curso, o lote continua processando as demais matriculas e devolve erro claro para o item afetado.
+- O modo demo passou a espelhar a mesma regra em `frontend/src/lib/demoApi.js`.
+- O seed de desenvolvimento passou a garantir turmas para os cursos com pendencias usadas na demonstracao: `UX-2026-A`, `ARQ-2026-A`, `PY-2026-A`, `DEVOPS-2026-A` e `PROMPT-2026-A`.
+
+## Validacao - 2026-05-01
+
+- Backend compilado com sucesso:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- EF confirmou ausencia de mudancas pendentes no modelo:
+  `dotnet ef migrations has-pending-model-changes --configuration Release --no-build`
+- A primeira tentativa de Vite normal falhou com `EPERM` ao limpar `wwwroot/assets`, por permissao/trava do diretorio de saida.
+- Frontend compilado e publicado com sucesso sem limpar o diretorio de saida:
+  `node.exe .\node_modules\vite\bin\vite.js build --emptyOutDir false`
+- Smoke test real em `http://127.0.0.1:5016` validou login admin e `PUT /api/Matriculas/aprovar-lote`.
+- Resultado do smoke: `matriculaTestada=4`, `totalSolicitado=1`, `totalAprovado=1`, `totalComErro=0`, turma atribuida `UX-2026-A`.
+
+## Implementado - 2026-05-01 - Turma padrao unica por curso
+
+- Padronizada a regra operacional de plataforma online: cada curso seedado passa a ter uma unica `Turma online - {Curso}`.
+- `POST /api/Turmas` agora cria somente a turma padrao do curso, aceita o nome como opcional e bloqueia a segunda turma do mesmo curso com conflito `409`.
+- O seed de desenvolvimento consolida turmas duplicadas dos cursos seedados, movendo matriculas, conteudos e avaliacoes para a turma padrao antes de remover a turma excedente.
+- A tela `Turmas` passou a orientar criacao apenas para cursos sem turma padrao, com nome automatico e feedback quando todos os cursos ja estao padronizados.
+- `Cursos`, `Matriculas`, conteudos do professor e modo demo foram ajustados para comunicar `turma padrao` em vez de sugerir multiplas turmas por curso.
+
+## Validacao - 2026-05-01 - Turma padrao unica
+
+- Backend recompilado com sucesso:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- EF confirmou ausencia de mudancas pendentes no modelo:
+  `dotnet ef migrations has-pending-model-changes --configuration Release --no-build`
+- Frontend recompilado com sucesso usando Vite sem limpar o diretorio de saida:
+  `node.exe .\node_modules\vite\bin\vite.js build --emptyOutDir false`
+- Smoke test real em `http://127.0.0.1:5016` confirmou `10` cursos seedados, `0` cursos sem turma padrao e `0` cursos com quantidade invalida de turmas.
+- O mesmo smoke tentou criar uma segunda turma para `Desenvolvimento Web Full Stack` e recebeu `409` com a mensagem `Este curso ja possui uma turma padrao...`.
+- Durante o smoke, o seed consolidou o dado legado de `Python para Automacao e Dados`, que ainda tinha `PY-2026-A` alem da turma padrao.
+## Implementado - 2026-05-01 - Professor responsavel por turma padrao
+
+- O seed de desenvolvimento agora distribui professores por afinidade de curso ao criar ou atualizar as turmas padrao.
+- Turmas existentes tambem passam a receber a atribuicao deterministica no seed, em vez de preservar concentracao acidental no `Professor Demo`.
+- A distribuicao validada ficou com `Professor Demo` em Full Stack, `Professor Teste 01` em UX/Mobile, `Professor Teste 02` em Arquitetura/Cyberseguranca, `Professor Teste 03` em Dados/Python/Prompt, `Professor Teste 04` em DevOps e `Professor Teste 05` em QA.
+
+## Validacao - 2026-05-01 - Professor por turma
+
+- Backend recompilado com sucesso:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- EF confirmou ausencia de mudancas pendentes no modelo:
+  `dotnet ef migrations has-pending-model-changes --configuration Release --no-build`
+- Startup real em `http://127.0.0.1:5016` reaplicou o seed no LocalDB.
+- Smoke via API confirmou `10` turmas, `0` turmas sem professor e `6` professores distintos vinculados as turmas padrao.
+## Implementado - 2026-05-01 - Mais 4 professores de teste
+
+- O seed de desenvolvimento passou de `5` para `9` professores adicionais, criando `Professor Teste 06` a `Professor Teste 09` de forma idempotente.
+- As especialidades dos professores de teste foram alinhadas aos cursos seedados para permitir uma turma padrao com professor dedicado.
+- A distribuicao das turmas padrao agora usa os `10` professores disponiveis na ordem dos cursos seedados, evitando repeticao de professor entre as `10` turmas.
+- O modo demo tambem recebeu mais `4` professores no banco inicial para manter a tela de professores mais proxima do ambiente real.
+
+## Validacao - 2026-05-01 - Mais professores
+
+- Backend recompilado com sucesso:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- EF confirmou ausencia de mudancas pendentes no modelo:
+  `dotnet ef migrations has-pending-model-changes --configuration Release --no-build`
+- Frontend recompilado com sucesso usando Vite sem limpar o diretorio de saida:
+  `node.exe .\node_modules\vite\bin\vite.js build --emptyOutDir false`
+- Startup real em `http://127.0.0.1:5016` reaplicou o seed no LocalDB.
+- Smoke via API confirmou `11` professores totais, `9` professores de teste, os novos `professor.teste06` a `professor.teste09` com `PROF-*`, `10` turmas e `10` professores distintos vinculados as turmas padrao.
+
+## implementar 02/05/2026
+- na tela de MODULOS destacar mais os modulos de cada curso
+-na tela de CONTEUDOS do alnuo, melhorar a hierararquia, destacar mais o nome do CURSO e MODULO, para o aluno identifcar de cara
+os materia de cada curso e modulo.
+-No panorama do ALUNO, mostrar o desempenho de notas e progresso por curso.
+-na tela de MODULOS do ADMIN, usar a lógica de add um '+' caso tenha mais de um modulo daquele curso.
+-na tela de MODULOS do ADMIN hoje a tabela é clicavel e mostra um CARD lateral, mas ele não some depois, adicionar uma opção de fechar.
+

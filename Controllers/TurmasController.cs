@@ -32,7 +32,7 @@ public class TurmasController : ControllerBase
 
             var turma = new Turma
             {
-                NomeTurma = dto.NomeTurma,
+                NomeTurma = dto.NomeTurma ?? string.Empty,
                 CursoId = dto.CursoId,
                 ProfessorId = dto.ProfessorId
             };
@@ -61,6 +61,10 @@ public class TurmasController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return Conflict(new { mensagem = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { mensagem = ex.Message });
         }
 
     }

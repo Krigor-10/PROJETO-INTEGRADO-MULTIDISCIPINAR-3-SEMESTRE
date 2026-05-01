@@ -47,7 +47,7 @@ export function SecaoAlunos({ alunos, cursos = [], matriculas = [] }) {
     );
   }, [cursoPorId, matriculas]);
   const obterMatriculaAluno = useCallback(
-    (aluno) => String(aluno.matricula || "").trim() || "Sem matricula",
+    (aluno) => String(aluno.matricula || "").trim() || "Sem registro",
     []
   );
   const alunosFiltrados = useMemo(() => {
@@ -236,7 +236,7 @@ export function SecaoAlunos({ alunos, cursos = [], matriculas = [] }) {
       </div>
       <DataTable
         columns={[
-          { key: "matricula", label: "MATRICULA", render: obterMatriculaAluno },
+          { key: "matricula", label: "REGISTRO DO ALUNO", render: obterMatriculaAluno },
           { key: "nome", label: "NOME" },
           { key: "email", label: "EMAIL" },
           {

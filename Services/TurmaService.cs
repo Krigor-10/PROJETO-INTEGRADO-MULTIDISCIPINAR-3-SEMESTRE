@@ -26,20 +26,38 @@ public class TurmaService : ITurmaService
     {
         ArgumentNullException.ThrowIfNull(turma);
 
-        if (string.IsNullOrWhiteSpace(turma.NomeTurma))
+        if (turma.CursoId <= 0)
         {
-            throw new ArgumentException("O nome da turma é obrigatório.");
+            throw new ArgumentException("Selecione um curso valido.");
         }
 
-        var existe = await _turmaRepository
-            .ExisteTurmaComMesmoNomeAsync(turma.NomeTurma, turma.CursoId);
+        if (turma.ProfessorId <= 0)
+        {
+            throw new ArgumentException("Selecione um professor valido.");
+        }
 
-        if (existe)
+        var curso = await _context.Cursos
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Id == turma.CursoId)
+            ?? throw new KeyNotFoundException("Curso nao encontrado.");
+
+        var professor = await _professorRepository.ObterPorIdAsync(turma.ProfessorId)
+            ?? throw new KeyNotFoundException("Professor nao encontrado.");
+
+        var turmaPadraoExistente = await _context.Turmas
+            .AsNoTracking()
+            .OrderBy(item => item.DataCriacao)
+            .ThenBy(item => item.Id)
+            .FirstOrDefaultAsync(item => item.CursoId == turma.CursoId);
+
+        if (turmaPadraoExistente is not null)
         {
             throw new InvalidOperationException(
-                $"Já existe uma turma com o nome '{turma.NomeTurma}' para este curso.");
+                "Este curso ja possui uma turma padrao. Use a turma existente para alterar professor ou acompanhar a operacao.");
         }
 
+        turma.NomeTurma = MontarNomeTurmaPadrao(curso.Titulo);
+        turma.DefinirProfessor(professor);
         turma.CodigoRegistro = await GerarCodigoTurmaAsync();
 
         await _turmaRepository.AdicionarAsync(turma);
@@ -51,7 +69,7 @@ public class TurmaService : ITurmaService
     public async Task<Turma> ObterTurmaPorIdAsync(int id)
     {
         return await _turmaRepository.ObterPorIdAsync(id)
-            ?? throw new KeyNotFoundException("Turma não encontrada.");
+            ?? throw new KeyNotFoundException("Turma nao encontrada.");
     }
 
     public async Task<IEnumerable<Turma>> ListarTurmasAsync()
@@ -95,5 +113,17 @@ public class TurmaService : ITurmaService
         }
 
         throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para a turma.");
+    }
+
+    private static string MontarNomeTurmaPadrao(string tituloCurso)
+    {
+        var titulo = string.IsNullOrWhiteSpace(tituloCurso)
+            ? "Curso"
+            : tituloCurso.Trim();
+        var nome = $"Turma online - {titulo}";
+
+        return nome.Length <= 120
+            ? nome
+            : nome[..120].TrimEnd();
     }
 }

@@ -11,6 +11,12 @@ function normalizarBusca(valor) {
     .trim();
 }
 
+function montarNomeTurmaPadrao(curso) {
+  const titulo = String(curso?.titulo || "").trim();
+  const nome = titulo ? `Turma online - ${titulo}` : "Turma online";
+  return nome.length <= 120 ? nome : nome.slice(0, 120).trimEnd();
+}
+
 export function SecaoTurmas({
   cursoEmFoco,
   ehGestor,
@@ -47,6 +53,27 @@ export function SecaoTurmas({
     () => [...cursoPorId.values()].sort((left, right) => String(left.titulo || "").localeCompare(String(right.titulo || ""), "pt-BR")),
     [cursoPorId]
   );
+  const turmaPadraoPorCursoId = useMemo(() => {
+    const mapa = new Map();
+
+    [...turmas]
+      .sort((left, right) => {
+        const leftDate = new Date(left.dataCriacao || 0).getTime();
+        const rightDate = new Date(right.dataCriacao || 0).getTime();
+        return leftDate - rightDate || Number(left.id || 0) - Number(right.id || 0);
+      })
+      .forEach((turma) => {
+        if (!mapa.has(turma.cursoId)) {
+          mapa.set(turma.cursoId, turma);
+        }
+      });
+
+    return mapa;
+  }, [turmas]);
+  const cursosDisponiveisParaTurma = useMemo(
+    () => cursosOrdenados.filter((curso) => !turmaPadraoPorCursoId.has(curso.id)),
+    [cursosOrdenados, turmaPadraoPorCursoId]
+  );
   const cursoFiltrado = useMemo(
     () => (filtroCurso === "todos" ? null : cursoPorId.get(Number(filtroCurso)) || null),
     [cursoPorId, filtroCurso]
@@ -55,6 +82,21 @@ export function SecaoTurmas({
     () => [...professores].sort((left, right) => String(left.nome || "").localeCompare(String(right.nome || ""), "pt-BR")),
     [professores]
   );
+  const motivoCriacaoTurmaBloqueada = useMemo(() => {
+    if (!cursosOrdenados.length) {
+      return "Cadastre ao menos um curso antes de criar a turma padrao.";
+    }
+
+    if (!professoresOrdenados.length) {
+      return "Cadastre ao menos um professor antes de criar a turma padrao.";
+    }
+
+    if (!cursosDisponiveisParaTurma.length) {
+      return "Todos os cursos ja possuem turma padrao. Para trocar professor, selecione a turma existente.";
+    }
+
+    return "";
+  }, [cursosDisponiveisParaTurma.length, cursosOrdenados.length, professoresOrdenados.length]);
   const cursosDasTurmas = useMemo(() => {
     const cursosPorId = new Map();
 
@@ -190,11 +232,22 @@ export function SecaoTurmas({
   }
 
   function abrirFormularioCriacao() {
+    if (motivoCriacaoTurmaBloqueada) {
+      setMensagem({ tone: "info", message: motivoCriacaoTurmaBloqueada });
+      return;
+    }
+
+    const cursoInicial =
+      filtroCurso !== "todos" && !turmaPadraoPorCursoId.has(Number(filtroCurso))
+        ? filtroCurso
+        : String(cursosDisponiveisParaTurma[0]?.id || "");
+    const curso = cursoPorId.get(Number(cursoInicial));
+
     setMensagem({ tone: "info", message: "" });
     setMensagemFormularioTurma({ tone: "info", message: "" });
     setDadosFormularioTurma({
-      nomeTurma: "",
-      cursoId: filtroCurso !== "todos" ? filtroCurso : "",
+      nomeTurma: montarNomeTurmaPadrao(curso),
+      cursoId: cursoInicial,
       professorId: ""
     });
     setFormularioCriacaoAberto(true);
@@ -216,10 +269,18 @@ export function SecaoTurmas({
 
   function atualizarCampoFormularioTurma(event) {
     const { name, value } = event.target;
-    setDadosFormularioTurma((atuais) => ({
-      ...atuais,
-      [name]: value
-    }));
+    setDadosFormularioTurma((atuais) => {
+      const proximos = {
+        ...atuais,
+        [name]: value
+      };
+
+      if (name === "cursoId") {
+        proximos.nomeTurma = montarNomeTurmaPadrao(cursoPorId.get(Number(value)));
+      }
+
+      return proximos;
+    });
   }
 
   function alternarTurma(turma) {
@@ -306,17 +367,19 @@ export function SecaoTurmas({
   async function salvarTurma(event) {
     event.preventDefault();
 
-    const nomeTurma = String(dadosFormularioTurma.nomeTurma || "").trim();
     const cursoId = Number(dadosFormularioTurma.cursoId);
     const professorId = Number(dadosFormularioTurma.professorId);
 
-    if (!nomeTurma) {
-      setMensagemFormularioTurma({ tone: "error", message: "Informe um nome para a turma." });
+    if (!cursoId) {
+      setMensagemFormularioTurma({ tone: "error", message: "Selecione o curso da turma padrao." });
       return;
     }
 
-    if (!cursoId) {
-      setMensagemFormularioTurma({ tone: "error", message: "Selecione o curso da nova turma." });
+    if (turmaPadraoPorCursoId.has(cursoId)) {
+      setMensagemFormularioTurma({
+        tone: "error",
+        message: "Este curso ja possui uma turma padrao. Use a turma existente para trocar o professor."
+      });
       return;
     }
 
@@ -324,6 +387,9 @@ export function SecaoTurmas({
       setMensagemFormularioTurma({ tone: "error", message: "Selecione o professor responsavel pela turma." });
       return;
     }
+
+    const curso = cursoPorId.get(cursoId);
+    const nomeTurma = montarNomeTurmaPadrao(curso);
 
     try {
       setMensagemFormularioTurma({ tone: "info", message: "" });
@@ -338,7 +404,6 @@ export function SecaoTurmas({
         })
       });
 
-      const curso = cursoPorId.get(cursoId);
       const professor = professorPorId.get(professorId);
 
       setFormularioCriacaoAberto(false);
@@ -349,7 +414,7 @@ export function SecaoTurmas({
       });
       setMensagem({
         tone: "success",
-        message: `Turma "${nomeTurma}" criada com sucesso para ${curso?.titulo || `Curso #${cursoId}`} com ${
+        message: `Turma padrao criada para ${curso?.titulo || `Curso #${cursoId}`} com ${
           professor?.nome || `Professor #${professorId}`
         }.`
       });
@@ -443,7 +508,7 @@ export function SecaoTurmas({
           }
         }}
       >
-        <div aria-label="Criar nova turma" aria-modal="true" className="content-form-modal__card" role="dialog">
+        <div aria-label="Criar turma padrao" aria-modal="true" className="content-form-modal__card" role="dialog">
           <button
             className="content-form-modal__close"
             disabled={salvandoCriacao}
@@ -454,25 +519,27 @@ export function SecaoTurmas({
           </button>
 
           <PanelCard
-            description="Defina o nome da turma, selecione o curso e atribua o professor responsavel antes de salvar."
-            title="Criar turma"
+            description="Selecione um curso sem turma padrao e atribua o professor responsavel antes de salvar."
+            title="Criar turma padrao"
           >
             {!cursosOrdenados.length ? (
-              <InlineMessage tone="info">Cadastre ao menos um curso antes de criar novas turmas.</InlineMessage>
+              <InlineMessage tone="info">Cadastre ao menos um curso antes de criar a turma padrao.</InlineMessage>
             ) : !professoresOrdenados.length ? (
-              <InlineMessage tone="info">Cadastre ao menos um professor antes de criar novas turmas.</InlineMessage>
+              <InlineMessage tone="info">Cadastre ao menos um professor antes de criar a turma padrao.</InlineMessage>
+            ) : !cursosDisponiveisParaTurma.length ? (
+              <InlineMessage tone="info">
+                Todos os cursos ja possuem turma padrao. Para trocar professor, selecione a turma existente.
+              </InlineMessage>
             ) : (
               <form className="management-form" onSubmit={salvarTurma}>
                 <div className="management-form__grid">
                   <label className="management-field management-field--wide">
-                    <span>Nome da turma</span>
+                    <span>Turma padrao</span>
                     <input
                       autoComplete="off"
-                      disabled={salvandoCriacao}
+                      readOnly
                       maxLength={120}
                       name="nomeTurma"
-                      onChange={atualizarCampoFormularioTurma}
-                      placeholder="Ex.: Programacao Aplicada - Turma B"
                       type="text"
                       value={dadosFormularioTurma.nomeTurma}
                     />
@@ -481,13 +548,13 @@ export function SecaoTurmas({
                   <label className="management-field">
                     <span>Curso</span>
                     <select
-                      disabled={salvandoCriacao || !cursosOrdenados.length}
+                      disabled={salvandoCriacao || !cursosDisponiveisParaTurma.length}
                       name="cursoId"
                       onChange={atualizarCampoFormularioTurma}
                       value={dadosFormularioTurma.cursoId}
                     >
-                      <option value="">Selecionar curso</option>
-                      {cursosOrdenados.map((curso) => (
+                      <option value="">Selecionar curso sem turma padrao</option>
+                      {cursosDisponiveisParaTurma.map((curso) => (
                         <option key={curso.id} value={curso.id}>
                           {curso.titulo}
                         </option>
@@ -520,10 +587,10 @@ export function SecaoTurmas({
                 <div className="management-form__actions">
                   <button
                     className="solid-button"
-                    disabled={salvandoCriacao || !cursosOrdenados.length || !professoresOrdenados.length}
+                    disabled={salvandoCriacao || !cursosDisponiveisParaTurma.length || !professoresOrdenados.length}
                     type="submit"
                   >
-                    {salvandoCriacao ? "Salvando..." : "Criar turma"}
+                    {salvandoCriacao ? "Salvando..." : "Criar turma padrao"}
                   </button>
 
                   <button
@@ -547,10 +614,10 @@ export function SecaoTurmas({
     <PanelCard
       description={
         cursoFiltrado
-          ? `Visao das turmas de ${cursoFiltrado.titulo}, com criacao e filtro contextualizados nesse curso.`
-          : "Visao das turmas disponiveis para alocacao e acompanhamento."
+          ? `Visao da turma padrao de ${cursoFiltrado.titulo}, com gestao contextualizada nesse curso.`
+          : "Visao das turmas padrao disponiveis para alocacao e acompanhamento."
       }
-      title={ehProfessor ? "Turmas ligadas ao seu perfil" : "Turmas cadastradas"}
+      title={ehProfessor ? "Turmas ligadas ao seu perfil" : "Turmas padrao dos cursos"}
     >
       <div className="table-toolbar table-toolbar--filters">
         <div className="table-filter-group">
@@ -567,7 +634,7 @@ export function SecaoTurmas({
               aria-label="Buscar turmas"
               className="table-inline-input table-inline-input--search"
               onChange={(event) => setBuscaTurma(event.target.value)}
-              placeholder="Pesquisar turmas"
+              placeholder="Pesquisar turma padrao"
               type="search"
               value={buscaTurma}
             />
@@ -607,11 +674,12 @@ export function SecaoTurmas({
           {podeGerenciarTurmas ? (
             <button
               className="table-action"
-              disabled={!cursosOrdenados.length || !professoresOrdenados.length}
+              disabled={Boolean(motivoCriacaoTurmaBloqueada)}
               onClick={abrirFormularioCriacao}
+              title={motivoCriacaoTurmaBloqueada || "Criar turma padrao"}
               type="button"
             >
-              Criar turma
+              Criar turma padrao
             </button>
           ) : null}
           <p className="table-toolbar__summary">
@@ -620,12 +688,15 @@ export function SecaoTurmas({
         </div>
       </div>
       {renderBarraAtribuicao()}
+      {podeGerenciarTurmas && motivoCriacaoTurmaBloqueada ? (
+        <InlineMessage tone="info">{motivoCriacaoTurmaBloqueada}</InlineMessage>
+      ) : null}
       {mensagem.message ? <InlineMessage tone={mensagem.tone}>{mensagem.message}</InlineMessage> : null}
       <DataTable
         columns={[
           ...(podeAtribuirProfessor ? [{ key: "selecionar", label: "Selecionar", render: renderSelecao }] : []),
-          { key: "codigoRegistro", label: "Registro", render: (turma) => turma.codigoRegistro || "Sem codigo" },
-          { key: "nomeTurma", label: "Turma" },
+          { key: "codigoRegistro", label: "CODIGO DA TURMA", render: (turma) => turma.codigoRegistro || "Sem codigo" },
+          { key: "nomeTurma", label: "Turma padrao" },
           {
             key: "cursoId",
             label: "Curso",
@@ -643,7 +714,7 @@ export function SecaoTurmas({
             render: (turma) => quantidadeAlunosPorTurma.get(turma.id) || 0
           }
         ]}
-        emptyMessage={temFiltroAtivo ? "Nenhuma turma encontrada com os filtros aplicados." : "Nenhuma turma encontrada."}
+        emptyMessage={temFiltroAtivo ? "Nenhuma turma padrao encontrada com os filtros aplicados." : "Nenhuma turma padrao encontrada."}
         rows={turmasFiltradas}
       />
       {renderFormularioCriacaoTurma()}

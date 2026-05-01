@@ -705,7 +705,7 @@ export function SecaoConteudosProfessor({
 
       {mostrarCardVinculosEnsino ? (
         <PanelCard
-          description="Cursos, turmas e modulos disponiveis para publicacao no seu login."
+          description="Cursos, turmas padrao e modulos disponiveis para publicacao no seu login."
           title="Seus vinculos de ensino"
         >
           <DataTable
