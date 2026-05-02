@@ -175,6 +175,16 @@ public static class DevelopmentDataSeeder
             bodyText: "Neste modulo vamos alinhar o ritmo da turma, revisar os fundamentos da web e preparar a base para os proximos projetos.",
             displayOrder: 1);
 
+        await EnsureConteudoAsync(
+            context,
+            professor,
+            fullStackClass,
+            fundamentosWebModule,
+            title: "Conteudo de teste - primeira pratica Full Stack",
+            description: "Atividade rapida para validar a exibicao de novos materiais na trilha do aluno.",
+            bodyText: "Use este material de teste para conferir a liberacao do conteudo, a marcacao de conclusao e a atualizacao do progresso do curso.",
+            displayOrder: 2);
+
         await context.SaveChangesAsync();
     }
 

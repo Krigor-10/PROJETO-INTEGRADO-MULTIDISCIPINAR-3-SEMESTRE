@@ -17,6 +17,21 @@ import {
   timestampFromApiDate
 } from "../../lib/format.js";
 
+const ACADEMIC_ACCENTS = [
+  { solid: "#22c55e", border: "rgba(143, 179, 154, 0.34)", soft: "rgba(143, 179, 154, 0.07)" },
+  { solid: "#38bdf8", border: "rgba(133, 174, 191, 0.34)", soft: "rgba(133, 174, 191, 0.07)" },
+  { solid: "#f59e0b", border: "rgba(184, 160, 111, 0.34)", soft: "rgba(184, 160, 111, 0.07)" },
+  { solid: "#a78bfa", border: "rgba(156, 145, 184, 0.34)", soft: "rgba(156, 145, 184, 0.07)" },
+  { solid: "#fb7185", border: "rgba(181, 139, 150, 0.34)", soft: "rgba(181, 139, 150, 0.07)" },
+  { solid: "#14b8a6", border: "rgba(130, 170, 163, 0.34)", soft: "rgba(130, 170, 163, 0.07)" },
+  { solid: "#84cc16", border: "rgba(168, 184, 120, 0.34)", soft: "rgba(168, 184, 120, 0.07)" },
+  { solid: "#f97316", border: "rgba(187, 146, 114, 0.34)", soft: "rgba(187, 146, 114, 0.07)" },
+  { solid: "#6366f1", border: "rgba(134, 141, 183, 0.34)", soft: "rgba(134, 141, 183, 0.07)" },
+  { solid: "#ef4444", border: "rgba(185, 135, 135, 0.34)", soft: "rgba(185, 135, 135, 0.07)" },
+  { solid: "#06b6d4", border: "rgba(120, 170, 180, 0.34)", soft: "rgba(120, 170, 180, 0.07)" },
+  { solid: "#d946ef", border: "rgba(173, 136, 180, 0.34)", soft: "rgba(173, 136, 180, 0.07)" }
+];
+
 export function SecaoCursosAluno({ avaliacoes = [], conteudos, cursos, matriculas, onNavigate, progressos = {}, turmas }) {
   const [matriculaEmDetalheId, setMatriculaEmDetalheId] = useState(null);
   const [modulosAbertos, setModulosAbertos] = useState({});
@@ -737,6 +752,10 @@ export function SecaoAvaliacoesAluno({ avaliacoes, onRefresh, onSessionExpired }
 export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessionExpired, progressos = {} }) {
   const [mensagem, setMensagem] = useState({ tone: "info", message: "" });
   const [conteudoProcessando, setConteudoProcessando] = useState(null);
+  const [conteudosConcluidosLocais, setConteudosConcluidosLocais] = useState(() => new Set());
+  const [conteudoSelecionadoId, setConteudoSelecionadoId] = useState(null);
+  const [detalheConteudoAberto, setDetalheConteudoAberto] = useState(true);
+  const [modulosAbertos, setModulosAbertos] = useState({});
 
   const matriculasAprovadas = useMemo(
     () =>
@@ -757,12 +776,20 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
   );
 
   const progressosConteudos = progressos.conteudos || [];
-  const progressosCursos = progressos.cursos || [];
 
   const progressoConteudoPorConteudoId = useMemo(
     () => new Map(progressosConteudos.map((progresso) => [progresso.conteudoDidaticoId, progresso])),
     [progressosConteudos]
   );
+
+  useEffect(() => {
+    const idsConteudosVisiveis = new Set(conteudos.map((conteudo) => conteudo.id));
+
+    setConteudosConcluidosLocais((atuais) => {
+      const proximos = new Set([...atuais].filter((conteudoId) => idsConteudosVisiveis.has(conteudoId)));
+      return proximos.size === atuais.size ? atuais : proximos;
+    });
+  }, [conteudos]);
 
   const conteudosOrdenados = useMemo(
     () =>
@@ -793,6 +820,149 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
       }),
     [conteudos]
   );
+  const gruposConteudosPorCurso = useMemo(() => {
+    const cursosMapeados = new Map();
+
+    conteudosOrdenados.forEach((conteudo) => {
+      const cursoId = Number(conteudo.cursoId);
+      const chaveCurso = cursoId || `curso-${conteudo.cursoTitulo || "sem-curso"}`;
+      const acentoCurso = obterAcentoAcademico(chaveCurso);
+      const curso = cursosMapeados.get(chaveCurso) || {
+        id: chaveCurso,
+        acento: acentoCurso,
+        titulo: conteudo.cursoTitulo || `Curso #${conteudo.cursoId}`,
+        turmas: new Set(),
+        modulos: new Map(),
+        totalConteudos: 0,
+        concluidos: 0
+      };
+      const moduloId = Number(conteudo.moduloId);
+      const chaveModulo = moduloId || `modulo-${conteudo.moduloTitulo || "sem-modulo"}`;
+      const acentoModulo = obterAcentoAcademicoPorIndice(curso.acento.indice + curso.modulos.size + 1);
+      const modulo = curso.modulos.get(chaveModulo) || {
+        id: chaveModulo,
+        acento: acentoModulo,
+        titulo: conteudo.moduloTitulo || "Modulo sem titulo",
+        conteudos: [],
+        concluidos: 0
+      };
+      const progressoConteudo = progressoConteudoPorConteudoId.get(conteudo.id);
+      const concluido = conteudosConcluidosLocais.has(conteudo.id) || estaConcluido(progressoConteudo);
+      const progressoPercentual = concluido ? 100 : Number(progressoConteudo?.percentualConclusao || 0);
+      const statusProgresso = concluido ? 3 : progressoConteudo?.statusProgresso || 1;
+
+      curso.turmas.add(conteudo.turmaNome || `Turma #${conteudo.turmaId}`);
+      curso.totalConteudos += 1;
+      curso.concluidos += concluido ? 1 : 0;
+
+      modulo.concluidos += concluido ? 1 : 0;
+      modulo.conteudos.push({
+        ...conteudo,
+        concluido,
+        progressoConteudo,
+        progressoPercentual,
+        statusProgresso
+      });
+
+      curso.modulos.set(chaveModulo, modulo);
+      cursosMapeados.set(chaveCurso, curso);
+    });
+
+    return [...cursosMapeados.values()].map((curso) => {
+      const modulos = [...curso.modulos.values()].map((modulo) => ({
+        ...modulo,
+        progresso: modulo.conteudos.length ? (modulo.concluidos / modulo.conteudos.length) * 100 : 0
+      }));
+      const conteudosDoCurso = modulos.flatMap((modulo) => modulo.conteudos);
+
+      return {
+        ...curso,
+        turmas: [...curso.turmas].sort((left, right) => left.localeCompare(right, "pt-BR")),
+        progresso: curso.totalConteudos ? (curso.concluidos / curso.totalConteudos) * 100 : 0,
+        modulos,
+        proximoConteudo: conteudosDoCurso.find((conteudo) => !conteudo.concluido) || conteudosDoCurso[0] || null
+      };
+    });
+  }, [conteudosConcluidosLocais, conteudosOrdenados, progressoConteudoPorConteudoId]);
+
+  const conteudosDaTrilha = useMemo(
+    () =>
+      gruposConteudosPorCurso.flatMap((curso) =>
+        curso.modulos.flatMap((modulo) =>
+          modulo.conteudos.map((conteudo) => ({
+            ...conteudo,
+            cursoAgrupadoId: curso.id,
+            cursoTitulo: curso.titulo,
+            cursoTurmas: curso.turmas,
+            cursoAcento: curso.acento,
+            moduloAgrupadoId: modulo.id,
+            moduloChave: obterChaveModuloConteudo(curso.id, modulo.id),
+            moduloTitulo: modulo.titulo
+          }))
+        )
+      ),
+    [gruposConteudosPorCurso]
+  );
+
+  const conteudoSelecionado = useMemo(
+    () => conteudosDaTrilha.find((conteudo) => conteudo.id === conteudoSelecionadoId) || null,
+    [conteudoSelecionadoId, conteudosDaTrilha]
+  );
+
+  useEffect(() => {
+    setModulosAbertos((atuais) => {
+      const proximos = {};
+
+      gruposConteudosPorCurso.forEach((curso) => {
+        curso.modulos.forEach((modulo, index) => {
+          const chaveModulo = obterChaveModuloConteudo(curso.id, modulo.id);
+          proximos[chaveModulo] = Object.prototype.hasOwnProperty.call(atuais, chaveModulo)
+            ? atuais[chaveModulo]
+            : modulo.concluidos < modulo.conteudos.length || index === 0;
+        });
+      });
+
+      const chavesAtuais = Object.keys(atuais);
+      const chavesProximas = Object.keys(proximos);
+      const semMudancas =
+        chavesAtuais.length === chavesProximas.length && chavesProximas.every((chave) => atuais[chave] === proximos[chave]);
+
+      return semMudancas ? atuais : proximos;
+    });
+  }, [gruposConteudosPorCurso]);
+
+  useEffect(() => {
+    if (!conteudosDaTrilha.length) {
+      setConteudoSelecionadoId(null);
+      return;
+    }
+
+    if (!conteudosDaTrilha.some((conteudo) => conteudo.id === conteudoSelecionadoId)) {
+      const proximoConteudo = conteudosDaTrilha.find((conteudo) => !conteudo.concluido) || conteudosDaTrilha[0];
+      setConteudoSelecionadoId(proximoConteudo.id);
+    }
+  }, [conteudoSelecionadoId, conteudosDaTrilha]);
+
+  useEffect(() => {
+    if (!conteudoSelecionado?.moduloChave) {
+      return;
+    }
+
+    setModulosAbertos((atuais) => (atuais[conteudoSelecionado.moduloChave] ? atuais : { ...atuais, [conteudoSelecionado.moduloChave]: true }));
+  }, [conteudoSelecionado]);
+
+  function alternarModuloConteudos(chaveModulo) {
+    setModulosAbertos((atuais) => ({
+      ...atuais,
+      [chaveModulo]: !atuais[chaveModulo]
+    }));
+  }
+
+  function selecionarConteudoAluno(conteudoId, chaveModulo) {
+    setConteudoSelecionadoId(conteudoId);
+    setDetalheConteudoAberto(true);
+    setModulosAbertos((atuais) => (atuais[chaveModulo] ? atuais : { ...atuais, [chaveModulo]: true }));
+  }
 
   async function marcarConteudoConcluido(conteudoId) {
     try {
@@ -800,6 +970,11 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
       setConteudoProcessando(conteudoId);
 
       await apiRequest(`/Progressos/conteudos/${conteudoId}/concluir`, { method: "PUT" });
+      setConteudosConcluidosLocais((atuais) => {
+        const proximos = new Set(atuais);
+        proximos.add(conteudoId);
+        return proximos;
+      });
       setMensagem({ tone: "success", message: "Conteudo marcado como concluido." });
       onRefresh?.();
     } catch (err) {
@@ -825,94 +1000,246 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
       `${matriculasAprovadas.length} matricula(s) ativa(s)`,
       `${turmasUnicas} turma(s) com material`,
       `${modulosUnicos} modulo(s) liberado(s)`,
-      `${formatPercent(calcularMediaProgresso(progressosCursos))} de progresso`,
+      `${formatPercent(calcularMediaGruposConteudo(gruposConteudosPorCurso))} de progresso`,
       `${totalTextos} texto(s)`,
       `${totalPdfs} pdf(s)`,
       `${totalRecursos} recurso(s)`
     ];
-  }, [conteudosOrdenados, matriculasAprovadas.length, progressosCursos]);
+  }, [conteudosOrdenados, gruposConteudosPorCurso, matriculasAprovadas.length]);
+  const acaoConteudoSelecionado = conteudoSelecionado ? obterAcaoConteudoAluno(conteudoSelecionado) : null;
 
   return (
     <div className="content-section content-section--student">
       {mensagem.message ? <InlineMessage tone={mensagem.tone}>{mensagem.message}</InlineMessage> : null}
 
-      <PanelCard
-        description="Biblioteca organizada por curso, turma e modulo para facilitar a consulta dos materiais mais recentes."
-        title="Biblioteca da sua trilha"
-      >
-        {conteudosOrdenados.length ? (
-          <div className="student-content-list">
-            {conteudosOrdenados.map((conteudo) => {
-              const acao = obterAcaoConteudoAluno(conteudo);
-              const progressoConteudo = progressoConteudoPorConteudoId.get(conteudo.id);
-              const progressoPercentual = Number(progressoConteudo?.percentualConclusao || 0);
-              const concluido = estaConcluido(progressoConteudo);
-              const processando = conteudoProcessando === conteudo.id;
+      <div className={`student-study-layout${conteudoSelecionado && detalheConteudoAberto ? " student-study-layout--with-detail" : ""}`}>
+        <PanelCard
+          description="Biblioteca em formato de trilha: abra um modulo, escolha um material e acompanhe o detalhe ao lado."
+          title="Biblioteca da sua trilha"
+        >
+          {gruposConteudosPorCurso.length ? (
+            <div className="student-content-course-list">
+              {gruposConteudosPorCurso.map((curso) => {
+                const moduloDoProximo = curso.modulos.find((modulo) => modulo.conteudos.some((conteudo) => conteudo.id === curso.proximoConteudo?.id));
+                const chaveModuloProximo = moduloDoProximo ? obterChaveModuloConteudo(curso.id, moduloDoProximo.id) : "";
 
-              return (
-                <article className="student-content-card" key={conteudo.id}>
-                  <div className="student-content-card__header">
-                    <div className="student-content-card__heading">
-                      <div className="table-badge-list">
-                        <span className="chip">{conteudo.cursoTitulo || `Curso #${conteudo.cursoId}`}</span>
-                        <span className="chip">{conteudo.turmaNome || `Turma #${conteudo.turmaId}`}</span>
-                        <span className="chip">{normalizeContentType(conteudo.tipoConteudo)}</span>
+                return (
+                  <section
+                    className="student-content-course"
+                    key={curso.id}
+                    style={{
+                      "--course-accent": curso.acento.solid,
+                      "--course-accent-border": curso.acento.border,
+                      "--course-accent-soft": curso.acento.soft
+                    }}
+                  >
+                    <header className="student-content-course__header">
+                      <div>
+                        <span className="eyebrow">Curso</span>
+                        <h3>{curso.titulo}</h3>
+                        <p>{curso.turmas.join(", ")}</p>
                       </div>
-                      <h3>{conteudo.titulo}</h3>
-                      <p className="student-content-card__meta">
-                        {conteudo.moduloTitulo || "Modulo sem titulo"}
-                        {typeof conteudo.ordemExibicao === "number" ? ` - Ordem ${conteudo.ordemExibicao}` : ""}
-                      </p>
+                      <div className="student-content-course__summary">
+                        <span className="chip">{curso.modulos.length} modulo{curso.modulos.length === 1 ? "" : "s"}</span>
+                        <span className="chip">{curso.totalConteudos} material{curso.totalConteudos === 1 ? "" : "s"}</span>
+                        <span className="chip">{formatPercent(curso.progresso)} de progresso</span>
+                      </div>
+                    </header>
+
+                    <div className="student-content-card__progress student-content-course__progress">
+                      <div className="student-progress-bar" aria-hidden="true">
+                        <span style={{ width: `${Math.max(0, Math.min(curso.progresso, 100))}%` }} />
+                      </div>
                     </div>
-                    <StatusPill tone={publicationStatusTone(conteudo.statusPublicacao)}>
-                      {normalizePublicationStatus(conteudo.statusPublicacao)}
-                    </StatusPill>
-                  </div>
 
-                  <p className="student-content-card__summary">{obterPreviaConteudoAluno(conteudo)}</p>
+                    {curso.proximoConteudo ? (
+                      <div className="student-content-course__next">
+                        <span>Continue de onde parou</span>
+                        <strong>{curso.proximoConteudo.titulo}</strong>
+                        <button
+                          className="table-action"
+                          onClick={() => selecionarConteudoAluno(curso.proximoConteudo.id, chaveModuloProximo)}
+                          type="button"
+                        >
+                          Abrir
+                        </button>
+                      </div>
+                    ) : null}
 
-                  <div className="student-content-card__progress">
-                    <StatusPill tone={progressStatusTone(progressoConteudo?.statusProgresso || 1)}>
-                      {normalizeProgressStatus(progressoConteudo?.statusProgresso || 1)} - {formatPercent(progressoPercentual)}
-                    </StatusPill>
-                    <div className="student-progress-bar" aria-hidden="true">
-                      <span style={{ width: `${Math.max(0, Math.min(progressoPercentual, 100))}%` }} />
+                    <div className="student-content-module-list">
+                      {curso.modulos.map((modulo) => {
+                        const chaveModulo = obterChaveModuloConteudo(curso.id, modulo.id);
+                        const moduloAberto = Boolean(modulosAbertos[chaveModulo]);
+
+                        return (
+                          <article
+                            className="student-content-module"
+                            key={modulo.id}
+                            style={{
+                              "--module-accent": modulo.acento.solid,
+                              "--module-accent-border": modulo.acento.border,
+                              "--module-accent-soft": modulo.acento.soft
+                            }}
+                          >
+                            <button
+                              aria-expanded={moduloAberto}
+                              className="student-content-module__toggle"
+                              onClick={() => alternarModuloConteudos(chaveModulo)}
+                              type="button"
+                            >
+                              <span className="student-content-module__copy">
+                                <span>Modulo</span>
+                                <strong>{modulo.titulo}</strong>
+                              </span>
+                              <span className="student-content-module__summary">
+                                <StatusPill tone={modulo.concluidos === modulo.conteudos.length ? "success" : "warning"}>
+                                  {modulo.concluidos}/{modulo.conteudos.length} concluido{modulo.conteudos.length === 1 ? "" : "s"}
+                                </StatusPill>
+                                <span>{formatPercent(modulo.progresso)}</span>
+                                <span className="student-content-module__toggle-symbol" aria-hidden="true">
+                                  {moduloAberto ? "-" : "+"}
+                                </span>
+                              </span>
+                            </button>
+
+                            {moduloAberto ? (
+                              <div className="student-content-compact-list">
+                                {modulo.conteudos.map((conteudo) => {
+                                  const acao = obterAcaoConteudoAluno(conteudo);
+                                  const processando = conteudoProcessando === conteudo.id;
+                                  const conteudoAtivo = conteudoSelecionadoId === conteudo.id;
+
+                                  return (
+                                    <article
+                                      className={`student-content-item${conteudoAtivo ? " student-content-item--active" : ""}`}
+                                      key={conteudo.id}
+                                    >
+                                      <button
+                                        className="student-content-item__main"
+                                        onClick={() => selecionarConteudoAluno(conteudo.id, chaveModulo)}
+                                        type="button"
+                                      >
+                                        <span className="student-content-item__order">
+                                          {typeof conteudo.ordemExibicao === "number" ? String(conteudo.ordemExibicao).padStart(2, "0") : "--"}
+                                        </span>
+                                        <span className="student-content-item__copy">
+                                          <span>{normalizeContentType(conteudo.tipoConteudo)}</span>
+                                          <strong>{conteudo.titulo}</strong>
+                                        </span>
+                                      </button>
+
+                                      <div className="student-content-item__status">
+                                        <StatusPill tone={conteudo.concluido ? "success" : progressStatusTone(conteudo.statusProgresso)}>
+                                          {conteudo.concluido ? "Concluido" : normalizeProgressStatus(conteudo.statusProgresso)}
+                                        </StatusPill>
+                                        <span>{formatPercent(conteudo.progressoPercentual)}</span>
+                                      </div>
+
+                                      <div className="student-content-item__actions">
+                                        {acao ? (
+                                          <a className="student-content-card__link" href={acao.href} rel="noreferrer" target="_blank">
+                                            {acao.label}
+                                          </a>
+                                        ) : null}
+                                        {!conteudo.concluido ? (
+                                          <button
+                                            className="table-action"
+                                            disabled={processando}
+                                            onClick={() => marcarConteudoConcluido(conteudo.id)}
+                                            type="button"
+                                          >
+                                            {processando ? "Salvando..." : "Concluir"}
+                                          </button>
+                                        ) : null}
+                                      </div>
+                                    </article>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })}
                     </div>
-                  </div>
+                  </section>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState message="Nenhum conteudo publicado foi liberado para as suas turmas ate agora." />
+          )}
+        </PanelCard>
 
-                  <div className="student-content-card__footer">
-                    <span>
-                      {conteudo.publicadoEm
-                        ? `Publicado em ${formatDate(conteudo.publicadoEm)}`
-                        : `Atualizado em ${formatDate(conteudo.atualizadoEm || conteudo.criadoEm)}`}
-                    </span>
+        {conteudoSelecionado && detalheConteudoAberto ? (
+          <aside
+            className="student-content-detail"
+            style={{ "--course-accent": conteudoSelecionado.cursoAcento.solid }}
+            aria-label="Detalhe do conteudo selecionado"
+          >
+            <PanelCard description={`${conteudoSelecionado.cursoTitulo} - ${conteudoSelecionado.moduloTitulo}`} title={conteudoSelecionado.titulo}>
+              <div className="module-detail-panel-actions">
+                <button className="table-action module-detail-close" onClick={() => setDetalheConteudoAberto(false)} type="button">
+                  Fechar detalhe
+                </button>
+              </div>
 
-                    <div className="student-content-card__actions">
-                      {acao ? (
-                        <a className="student-content-card__link" href={acao.href} rel="noreferrer" target="_blank">
-                          {acao.label}
-                        </a>
-                      ) : (
-                        <span className="student-content-card__note">Leitura disponivel no proprio painel.</span>
-                      )}
-                      <button
-                        className="table-action"
-                        disabled={concluido || processando}
-                        onClick={() => marcarConteudoConcluido(conteudo.id)}
-                        type="button"
-                      >
-                        {concluido ? "Ja concluido" : processando ? "Salvando..." : "Marcar concluido"}
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <EmptyState message="Nenhum conteudo publicado foi liberado para as suas turmas ate agora." />
-        )}
-      </PanelCard>
+              <div className="student-content-detail__meta">
+                <span className="chip">{normalizeContentType(conteudoSelecionado.tipoConteudo)}</span>
+                <StatusPill tone={publicationStatusTone(conteudoSelecionado.statusPublicacao)}>
+                  {normalizePublicationStatus(conteudoSelecionado.statusPublicacao)}
+                </StatusPill>
+                <StatusPill tone={progressStatusTone(conteudoSelecionado.statusProgresso)}>
+                  {normalizeProgressStatus(conteudoSelecionado.statusProgresso)}
+                </StatusPill>
+              </div>
+
+              <div className="student-content-card__progress">
+                <span className="student-content-detail__progress-label">{formatPercent(conteudoSelecionado.progressoPercentual)} de progresso</span>
+                <div className="student-progress-bar" aria-hidden="true">
+                  <span style={{ width: `${Math.max(0, Math.min(conteudoSelecionado.progressoPercentual, 100))}%` }} />
+                </div>
+              </div>
+
+              <p className="student-content-card__summary">{obterPreviaConteudoAluno(conteudoSelecionado)}</p>
+
+              {conteudoSelecionado.corpoTexto ? (
+                <div className="student-content-detail__body">
+                  <span>Conteudo</span>
+                  <p>{conteudoSelecionado.corpoTexto}</p>
+                </div>
+              ) : null}
+
+              <div className="student-content-detail__footer">
+                <span>
+                  {conteudoSelecionado.publicadoEm
+                    ? `Publicado em ${formatDate(conteudoSelecionado.publicadoEm)}`
+                    : `Atualizado em ${formatDate(conteudoSelecionado.atualizadoEm || conteudoSelecionado.criadoEm)}`}
+                </span>
+
+                <div className="student-content-card__actions">
+                  {acaoConteudoSelecionado ? (
+                    <a className="student-content-card__link" href={acaoConteudoSelecionado.href} rel="noreferrer" target="_blank">
+                      {acaoConteudoSelecionado.label}
+                    </a>
+                  ) : (
+                    <span className="student-content-card__note">Leitura disponivel no proprio painel.</span>
+                  )}
+                  {!conteudoSelecionado.concluido ? (
+                    <button
+                      className="table-action"
+                      disabled={conteudoProcessando === conteudoSelecionado.id}
+                      onClick={() => marcarConteudoConcluido(conteudoSelecionado.id)}
+                      type="button"
+                    >
+                      {conteudoProcessando === conteudoSelecionado.id ? "Salvando..." : "Marcar concluido"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </PanelCard>
+          </aside>
+        ) : null}
+      </div>
 
       <section className="content-section__intro">
         <div className="content-section__intro-copy">
@@ -1074,13 +1401,44 @@ function obterDisponibilidadeAvaliacao(avaliacao) {
   };
 }
 
-function calcularMediaProgresso(progressosCursos) {
-  if (!progressosCursos.length) {
+function calcularMediaGruposConteudo(gruposConteudosPorCurso) {
+  if (!gruposConteudosPorCurso.length) {
     return 0;
   }
 
-  const total = progressosCursos.reduce((soma, progresso) => soma + Number(progresso.percentualConclusao || 0), 0);
-  return total / progressosCursos.length;
+  const total = gruposConteudosPorCurso.reduce((soma, curso) => soma + Number(curso.progresso || 0), 0);
+  return total / gruposConteudosPorCurso.length;
+}
+
+function obterChaveModuloConteudo(cursoId, moduloId) {
+  return `${cursoId || "curso"}-${moduloId || "modulo"}`;
+}
+
+function obterIndiceAcentoAcademico(valor) {
+  const texto = String(valor || "default");
+  let hash = 0;
+
+  for (let index = 0; index < texto.length; index += 1) {
+    hash = (hash * 31 + texto.charCodeAt(index)) % ACADEMIC_ACCENTS.length;
+  }
+
+  return Math.abs(hash);
+}
+
+function obterAcentoAcademico(valor, offset = 0) {
+  const indiceBase = obterIndiceAcentoAcademico(valor);
+  const indice = (indiceBase + offset + ACADEMIC_ACCENTS.length) % ACADEMIC_ACCENTS.length;
+
+  return obterAcentoAcademicoPorIndice(indice);
+}
+
+function obterAcentoAcademicoPorIndice(indice) {
+  const indiceNormalizado = ((indice % ACADEMIC_ACCENTS.length) + ACADEMIC_ACCENTS.length) % ACADEMIC_ACCENTS.length;
+
+  return {
+    ...ACADEMIC_ACCENTS[indiceNormalizado],
+    indice: indiceNormalizado
+  };
 }
 
 function estaConcluido(progresso) {

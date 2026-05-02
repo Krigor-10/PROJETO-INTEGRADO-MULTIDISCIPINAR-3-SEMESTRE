@@ -653,6 +653,7 @@ export default function WorkspaceScreen({
                 />
               ) : (
                 <ResumoWorkspace
+                  avaliacoes={snapshot.avaliacoes}
                   conteudos={snapshot.conteudos}
                   cursos={visibleCursos}
                   ehGestor={isManager}
@@ -660,6 +661,7 @@ export default function WorkspaceScreen({
                   ehAluno={isStudent}
                   matriculas={matriculaRows}
                   pendencias={pendingRows}
+                  progressos={snapshot.progressos}
                   turmas={visibleTurmas}
                   usuario={usuario}
                 />

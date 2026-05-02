@@ -331,3 +331,114 @@ os materia de cada curso e modulo.
 -na tela de MODULOS do ADMIN, usar a lógica de add um '+' caso tenha mais de um modulo daquele curso.
 -na tela de MODULOS do ADMIN hoje a tabela é clicavel e mostra um CARD lateral, mas ele não some depois, adicionar uma opção de fechar.
 
+## Implementado - 2026-05-02 - Hierarquia visual de modulos, conteudos e desempenho
+
+- A tela administrativa de `Modulos` passou a destacar melhor o modulo e o curso na tabela.
+- A coluna de curso em `Modulos` agora informa quantos modulos existem naquele curso e mostra um botao `+` quando ha mais de um modulo, abrindo um popup com a lista completa dos modulos do curso.
+- O card lateral de detalhes em `Modulos` ganhou a acao `Fechar detalhe`, permitindo recolher a coluna lateral sem precisar trocar de linha ou alterar filtros.
+- A tela de `Conteudos` do aluno foi reorganizada em hierarquia visual por `Curso` > `Modulo` > `Materiais`.
+- Cada grupo de curso do aluno mostra turmas, quantidade de modulos, quantidade de materiais e progresso medio.
+- Cada bloco de modulo do aluno mostra progresso do modulo, total concluido e mantem as acoes de abrir material ou marcar conteudo como concluido.
+- O `Panorama` do aluno passou a exibir o card `Desempenho por curso`, consolidando progresso, nota atual da matricula e media de avaliacoes com nota registrada.
+- O bundle React foi recompilado e publicado em `wwwroot/assets/react`, atualizando `wwwroot/index.html` para os novos arquivos gerados.
+
+## Validacao - 2026-05-02 - Hierarquia visual
+
+- Frontend compilado com sucesso usando Vite sem limpar o diretorio de saida:
+  `node.exe .\node_modules\vite\bin\vite.js build --emptyOutDir false`
+- Bundles antigos de `wwwroot/assets/react/index-*` que nao eram mais referenciados pelo `wwwroot/index.html` foram removidos manualmente.
+- Backend recompilado com sucesso:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- `git diff --check` executado sem erros de whitespace, apenas avisos normais de conversao LF/CRLF no Windows.
+- Aplicacao real iniciada em `http://127.0.0.1:5017` usando o DLL Release.
+- Smoke HTTP de `http://127.0.0.1:5017` retornou `200` e confirmou que o `index.html` referencia os novos bundles `index-4X0PmBtg.js` e `index-T7mpNRMd.css`.
+## Ajuste - 2026-05-02 - Botao e progresso dos conteudos do aluno
+
+- Na tela de `Conteudos` do aluno, o botao `Ja concluido` deixou de aparecer para materiais ja finalizados.
+- Conteudos ainda pendentes continuam exibindo `Marcar concluido`; durante o envio, a acao fica como `Salvando...`.
+- Ao concluir um conteudo, a tela passa a marcar esse material localmente como concluido enquanto o snapshot geral e recarregado.
+- As barras e percentuais de curso/modulo na biblioteca do aluno agora refletem a proporcao de conteudos concluidos no grupo visivel.
+
+## Validacao - 2026-05-02 - Conteudos concluidos
+
+- Frontend recompilado com sucesso usando Vite sem limpar o diretorio de saida:
+  `node.exe .\node_modules\vite\bin\vite.js build --emptyOutDir false`
+- Smoke HTTP de `http://127.0.0.1:5017` confirmou os bundles atuais `index-DR29xIbz.js` e `index-T7mpNRMd.css`.
+## Ajuste - 2026-05-02 - Cores por curso e modulo
+
+- A biblioteca de `Conteudos` do aluno passou a usar uma paleta deterministica por curso, mantendo a mesma cor para o mesmo curso em novas renderizacoes.
+- Cada modulo dentro do curso recebeu uma cor propria derivada da paleta, aplicada na lateral do bloco, no rotulo do modulo, no percentual e no topo/progresso dos cards de conteudo.
+- Os chips de resumo do curso tambem herdam a cor do curso, substituindo o verde fixo anterior por uma identidade visual por agrupamento.
+
+## Validacao - 2026-05-02 - Cores da biblioteca do aluno
+
+- Frontend recompilado com sucesso usando Vite sem limpar o diretorio de saida:
+  `node.exe .\node_modules\vite\bin\vite.js build --emptyOutDir false`
+- Bundles intermediarios de `wwwroot/assets/react/index-*` que nao eram mais referenciados pelo `wwwroot/index.html` foram removidos manualmente.
+- `git diff --check` executado sem erros de whitespace, apenas avisos normais de conversao LF/CRLF no Windows.
+- Smoke HTTP de `http://127.0.0.1:5017` retornou `200` e confirmou os bundles atuais `index-X1zeqQ8k.js` e `index-t5eEmWgO.css`.
+## Ajuste - 2026-05-02 - Cores mais discretas na biblioteca do aluno
+
+- A paleta de curso/modulo foi suavizada para tons menos saturados e com menor opacidade.
+- A cor deixou de dominar rotulos e detalhes principais, ficando como pista visual em bordas, chips sutis e barra de progresso.
+- Os cards de conteudo deixaram de usar gradiente forte por modulo, reduzindo o excesso visual na leitura da trilha.
+
+## Validacao - 2026-05-02 - Cores discretas
+
+- Frontend recompilado com sucesso usando Vite sem limpar o diretorio de saida:
+  `node.exe .\node_modules\vite\bin\vite.js build --emptyOutDir false`
+- Bundles intermediarios de `wwwroot/assets/react/index-*` que nao eram mais referenciados pelo `wwwroot/index.html` foram removidos manualmente.
+- Smoke HTTP de `http://127.0.0.1:5017` retornou `200` e confirmou os bundles atuais `index-DL7kYlAP.js` e `index-CCLV50g9.css`.
+## Ajuste - 2026-05-02 - Cor somente no border-left do curso
+
+- A biblioteca de `Conteudos` do aluno agora concentra a cor de identificacao no `border-left` de cada curso.
+- Chips, modulos e topo dos cards voltaram para tons neutros, reduzindo o excesso visual e mantendo a diferenciacao por curso.
+
+## Validacao - 2026-05-02 - Border-left por curso
+
+- Frontend recompilado com sucesso usando Vite sem limpar o diretorio de saida:
+  `node.exe .\node_modules\vite\bin\vite.js build --emptyOutDir false`
+- Bundles intermediarios de `wwwroot/assets/react/index-*` que nao eram mais referenciados pelo `wwwroot/index.html` foram removidos manualmente.
+- Smoke HTTP de `http://127.0.0.1:5017` retornou `200` e confirmou os bundles atuais `index-C6KVBZYy.js` e `index-C0K0IFTl.css`.
+## Ajuste - 2026-05-02 - Border-left e progresso com a cor do curso
+
+- A biblioteca de `Conteudos` do aluno agora usa uma cor forte no `border-left` de cada curso.
+- A barra de progresso dos conteudos dentro do curso passou a usar a mesma cor do curso, mantendo os demais elementos em tons neutros.
+
+## Validacao - 2026-05-02 - Cor do curso no progresso
+
+- Frontend recompilado com sucesso usando Vite sem limpar o diretorio de saida:
+  `node.exe .\node_modules\vite\bin\vite.js build --emptyOutDir false`
+- Bundles intermediarios de `wwwroot/assets/react/index-*` que nao eram mais referenciados pelo `wwwroot/index.html` foram removidos manualmente.
+- Smoke HTTP de `http://127.0.0.1:5017` retornou `200` e confirmou os bundles atuais `index-DwlShHXK.js` e `index-BDgsjKeW.css`.
+## Ajuste - 2026-05-02 - Conteudo de teste para aluno 36
+
+- O seed de desenvolvimento passou a garantir um segundo conteudo publicado em `Desenvolvimento Web Full Stack` > `Turma online - Desenvolvimento Web Full Stack` > `Fundamentos da Web Moderna`.
+- O novo material se chama `Conteudo de teste - primeira pratica Full Stack`, com ordem de exibicao `2`.
+- Como conteudo e liberado por turma, o material fica visivel para o `AlunoId=36` quando ele possui matricula aprovada na turma de Full Stack.
+
+## Validacao - 2026-05-02 - Conteudo aluno 36
+
+- Backend recompilado com sucesso apos encerrar o processo que bloqueava o DLL Release:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- Aplicacao real reiniciada em `http://127.0.0.1:5017`; o seed executou e inseriu o novo conteudo no LocalDB.
+- Consulta SQL confirmou `2` conteudos publicados na turma `Turma online - Desenvolvimento Web Full Stack`.
+- Smoke autenticado em `GET /api/ConteudosDidaticos/aluno/36` confirmou o novo conteudo `Conteudo de teste - primeira pratica Full Stack` no curso `Desenvolvimento Web Full Stack`.
+## Implementado - 2026-05-02 - Trilha compacta de conteudos do aluno
+
+- A tela de `Conteudos` do aluno deixou de empilhar cards grandes para cada material.
+- A biblioteca agora organiza a jornada por curso com `border-left` colorido, progresso do curso e atalho `Continue de onde parou`.
+- Os modulos viraram secoes em sanfona, mostrando progresso, quantidade concluida e uma lista compacta de materiais.
+- Cada conteudo aparece como uma linha escaneavel com ordem, tipo, titulo, status, percentual e acao curta de conclusao.
+- Ao selecionar um conteudo, o detalhe abre em uma coluna lateral com resumo, texto, link externo quando existir, progresso e acao de marcar como concluido.
+- O detalhe lateral pode ser fechado e reaberto ao selecionar qualquer material da trilha.
+
+## Validacao - 2026-05-02 - Trilha compacta de conteudos
+
+- Frontend recompilado com sucesso usando Vite sem limpar o diretorio de saida:
+  `node.exe .\node_modules\vite\bin\vite.js build --emptyOutDir false`
+- Backend recompilado com sucesso:
+  `dotnet build "Sistema Academico Integrado.csproj" -c Release /p:UseAppHost=false`
+- Bundles intermediarios de `wwwroot/assets/react/index-*` que nao eram mais referenciados pelo `wwwroot/index.html` foram removidos manualmente.
+- `git diff --check` executado sem erros de whitespace, apenas avisos normais de conversao LF/CRLF no Windows.
+- Smoke HTTP de `http://127.0.0.1:5017` retornou `200` e confirmou os bundles atuais `index-DHphWRa6.js` e `index-CiFh6iiM.css`.
