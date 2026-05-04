@@ -57,10 +57,11 @@ export async function loadWorkspaceSnapshot(usuario) {
     };
   }
 
-  const [cursos, turmas, matriculas, conteudos, avaliacoes, progressos] = await Promise.all([
+  const [cursos, turmas, matriculas, modulos, conteudos, avaliacoes, progressos] = await Promise.all([
     apiRequest("/Cursos"),
     apiRequest("/Turmas"),
     apiRequest(`/Matriculas/aluno/${usuario.id}`),
+    apiRequest(`/Modulos/aluno/${usuario.id}`),
     apiRequest(`/ConteudosDidaticos/aluno/${usuario.id}`),
     apiRequest(`/Avaliacoes/aluno/${usuario.id}`),
     apiRequest(`/Progressos/aluno/${usuario.id}`)
@@ -71,6 +72,7 @@ export async function loadWorkspaceSnapshot(usuario) {
     cursos,
     turmas,
     matriculas,
+    modulos,
     conteudos,
     avaliacoes,
     progressos

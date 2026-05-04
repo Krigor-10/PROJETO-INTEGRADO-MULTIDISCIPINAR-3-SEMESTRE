@@ -674,6 +674,7 @@ export default function WorkspaceScreen({
                 conteudos={snapshot.conteudos}
                 cursos={snapshot.cursos}
                 matriculas={snapshot.matriculas}
+                modulos={snapshot.modulos}
                 onNavigate={onNavigate}
                 progressos={snapshot.progressos}
                 turmas={snapshot.turmas}
@@ -741,10 +742,13 @@ export default function WorkspaceScreen({
               ) : (
                 <SecaoConteudosAluno
                   conteudos={snapshot.conteudos}
+                  cursos={snapshot.cursos}
                   matriculas={snapshot.matriculas}
+                  modulos={snapshot.modulos}
                   onRefresh={() => setRefreshKey((current) => current + 1)}
                   onSessionExpired={onSessionExpired}
                   progressos={snapshot.progressos}
+                  turmas={snapshot.turmas}
                 />
               )
             ) : null}

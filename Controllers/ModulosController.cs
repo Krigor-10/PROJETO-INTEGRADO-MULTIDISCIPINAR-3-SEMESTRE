@@ -40,6 +40,19 @@ public class ModulosController : ControllerBase
         return Ok(modulos.Select(MapResponse));
     }
 
+    [HttpGet("aluno/{alunoId:int}")]
+    [Authorize(Roles = "Aluno")]
+    public async Task<IActionResult> ListarModulosDoAluno(int alunoId)
+    {
+        if (!UsuarioAtualPodeAcessarAluno(alunoId))
+        {
+            return Forbid();
+        }
+
+        var modulos = await _moduloService.ListarModulosPorAlunoAsync(alunoId);
+        return Ok(modulos.Select(MapResponse));
+    }
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> ObterModuloPorId(int id)
     {
@@ -110,5 +123,11 @@ public class ModulosController : ControllerBase
     {
         var rawId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("usuarioId");
         return int.TryParse(rawId, out var professorId) ? professorId : null;
+    }
+
+    private bool UsuarioAtualPodeAcessarAluno(int alunoId)
+    {
+        var rawId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("usuarioId");
+        return int.TryParse(rawId, out var usuarioId) && usuarioId == alunoId;
     }
 }

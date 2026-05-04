@@ -113,6 +113,16 @@ public class MatriculaService : IMatriculaService
             matricula.CodigoRegistro = await GerarCodigoMatriculaAsync();
         }
 
+        var matriculaAtiva = await ObterMatriculaAprovadaNaTurmaAsync(matricula, turma);
+        if (matriculaAtiva is not null)
+        {
+            await ConsolidarMatriculaDuplicadaAsync(matricula, matriculaAtiva, turma, aluno);
+            await _matriculaRepository.SalvarAlteracoesAsync();
+            return;
+        }
+
+        await GarantirAlunoSemOutraMatriculaPendenteNaTurmaAsync(matricula, turma);
+
         matricula.AprovarComTurma(turmaId, matricula.CursoId);
         await GarantirCodigoAlunoAsync(aluno);
         aluno.TurmaAtual = turma.NomeTurma;
@@ -238,7 +248,14 @@ public class MatriculaService : IMatriculaService
             ?? throw new KeyNotFoundException("Aluno nao encontrado.");
 
         var turma = await ResolverTurmaAutomaticaAsync(matricula);
-        await GarantirAlunoSemMatriculaAtivaNaTurmaAsync(matricula, turma);
+
+        var matriculaAtiva = await ObterMatriculaAprovadaNaTurmaAsync(matricula, turma);
+        if (matriculaAtiva is not null)
+        {
+            return await ConsolidarMatriculaDuplicadaAsync(matricula, matriculaAtiva, turma, aluno);
+        }
+
+        await GarantirAlunoSemOutraMatriculaPendenteNaTurmaAsync(matricula, turma);
 
         if (string.IsNullOrWhiteSpace(matricula.CodigoRegistro))
         {
@@ -290,19 +307,52 @@ public class MatriculaService : IMatriculaService
         return turma;
     }
 
-    private async Task GarantirAlunoSemMatriculaAtivaNaTurmaAsync(Matricula matricula, Turma turma)
+    private async Task<Matricula?> ObterMatriculaAprovadaNaTurmaAsync(Matricula matricula, Turma turma)
     {
-        var jaPossuiMatricula = await _context.Matriculas.AnyAsync(item =>
+        return await _context.Matriculas.FirstOrDefaultAsync(item =>
             item.Id != matricula.Id &&
             item.AlunoId == matricula.AlunoId &&
             item.TurmaId == turma.Id &&
-            item.Status != StatusMatricula.Rejeitada &&
-            item.Status != StatusMatricula.Cancelada);
+            item.Status == StatusMatricula.Aprovada);
+    }
 
-        if (jaPossuiMatricula)
+    private async Task GarantirAlunoSemOutraMatriculaPendenteNaTurmaAsync(Matricula matricula, Turma turma)
+    {
+        var jaPossuiMatriculaPendente = await _context.Matriculas.AnyAsync(item =>
+            item.Id != matricula.Id &&
+            item.AlunoId == matricula.AlunoId &&
+            item.TurmaId == turma.Id &&
+            item.Status == StatusMatricula.Pendente);
+
+        if (jaPossuiMatriculaPendente)
         {
-            throw new InvalidOperationException("O aluno ja possui matricula ativa nesta turma.");
+            throw new InvalidOperationException("O aluno ja possui outra matricula pendente nesta turma.");
         }
+    }
+
+    private async Task<AprovacaoMatriculaItemDto> ConsolidarMatriculaDuplicadaAsync(
+        Matricula matriculaDuplicada,
+        Matricula matriculaAtiva,
+        Turma turma,
+        Aluno aluno)
+    {
+        if (string.IsNullOrWhiteSpace(matriculaAtiva.CodigoRegistro))
+        {
+            matriculaAtiva.CodigoRegistro = await GerarCodigoMatriculaAsync();
+        }
+
+        matriculaDuplicada.Cancelar();
+        await GarantirCodigoAlunoAsync(aluno);
+        aluno.TurmaAtual = turma.NomeTurma;
+
+        return new AprovacaoMatriculaItemDto
+        {
+            MatriculaId = matriculaAtiva.Id,
+            CodigoRegistro = matriculaAtiva.CodigoRegistro,
+            CursoId = matriculaAtiva.CursoId,
+            TurmaId = turma.Id,
+            NomeTurma = turma.NomeTurma
+        };
     }
 
     private async Task<AprovacaoMatriculaErroDto> CriarErroAprovacaoAsync(int matriculaId, string motivo)

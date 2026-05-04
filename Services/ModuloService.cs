@@ -59,6 +59,12 @@ public class ModuloService : IModuloService
         return await _moduloRepository.ObterPorProfessorAsync(professorId);
     }
 
+    public async Task<IEnumerable<Modulo>> ListarModulosPorAlunoAsync(int alunoId)
+    {
+        await ValidarAlunoAsync(alunoId);
+        return await _moduloRepository.ObterPorAlunoAsync(alunoId);
+    }
+
     public async Task<IEnumerable<Modulo>> ListarModulosPorCursoAsync(int cursoId)
     {
         await ValidarCursoAsync(cursoId);
@@ -102,6 +108,15 @@ public class ModuloService : IModuloService
     {
         _ = await _cursoRepository.ObterPorIdAsync(cursoId)
             ?? throw new KeyNotFoundException("Curso nao encontrado.");
+    }
+
+    private async Task ValidarAlunoAsync(int alunoId)
+    {
+        var existe = await _context.Alunos.AsNoTracking().AnyAsync(aluno => aluno.Id == alunoId);
+        if (!existe)
+        {
+            throw new KeyNotFoundException("Aluno nao encontrado.");
+        }
     }
 
     private static void ValidarTitulo(string titulo)

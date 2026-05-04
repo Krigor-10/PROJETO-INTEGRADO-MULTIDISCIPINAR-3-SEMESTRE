@@ -8,12 +8,10 @@ import {
   formatGrade,
   formatPercent,
   normalizeContentType,
-  normalizePublicationStatus,
   normalizeProgressStatus,
   normalizeStatus,
   parseApiDate,
   progressStatusTone,
-  publicationStatusTone,
   timestampFromApiDate
 } from "../../lib/format.js";
 
@@ -32,11 +30,12 @@ const ACADEMIC_ACCENTS = [
   { solid: "#d946ef", border: "rgba(173, 136, 180, 0.34)", soft: "rgba(173, 136, 180, 0.07)" }
 ];
 
-export function SecaoCursosAluno({ avaliacoes = [], conteudos, cursos, matriculas, onNavigate, progressos = {}, turmas }) {
+export function SecaoCursosAluno({ avaliacoes = [], conteudos, cursos, matriculas, modulos = [], onNavigate, progressos = {}, turmas }) {
   const [matriculaEmDetalheId, setMatriculaEmDetalheId] = useState(null);
   const [modulosAbertos, setModulosAbertos] = useState({});
   const cursoPorId = useMemo(() => mapById(cursos), [cursos]);
   const turmaPorId = useMemo(() => mapById(turmas), [turmas]);
+  const modulosPorCursoId = useMemo(() => agruparModulosPorCurso(modulos), [modulos]);
   const progressoCursoPorMatricula = useMemo(
     () => new Map((progressos.cursos || []).map((progresso) => [progresso.matriculaId, progresso])),
     [progressos.cursos]
@@ -94,6 +93,7 @@ export function SecaoCursosAluno({ avaliacoes = [], conteudos, cursos, matricula
         .map((matricula) => {
           const resumoTurma = resumoConteudosPorTurma.get(matricula.turmaId) || null;
           const progressoCurso = progressoCursoPorMatricula.get(matricula.id);
+          const modulosDoCurso = modulosPorCursoId.get(Number(matricula.cursoId)) || [];
 
           return {
             id: matricula.id,
@@ -102,13 +102,13 @@ export function SecaoCursosAluno({ avaliacoes = [], conteudos, cursos, matricula
             turmaId: matricula.turmaId,
             turma: turmaPorId.get(matricula.turmaId)?.nomeTurma || matricula.turma?.nomeTurma || "Turma em definicao",
             materiais: resumoTurma?.total || 0,
-            modulos: resumoTurma?.modulos.size || 0,
+            modulos: modulosDoCurso.length || resumoTurma?.modulos.size || 0,
             progresso: progressoCurso?.percentualConclusao || 0,
             ultimaPublicacao: resumoTurma?.ultimaPublicacao || null,
             notaFinal: matricula.notaFinal ?? 0
           };
         }),
-    [cursoPorId, matriculas, progressoCursoPorMatricula, resumoConteudosPorTurma, turmaPorId]
+    [cursoPorId, matriculas, modulosPorCursoId, progressoCursoPorMatricula, resumoConteudosPorTurma, turmaPorId]
   );
 
   useEffect(() => {
@@ -144,6 +144,10 @@ export function SecaoCursosAluno({ avaliacoes = [], conteudos, cursos, matricula
       grupos.set(chave, grupo);
       return grupo;
     }
+
+    (modulosPorCursoId.get(Number(linha.cursoId)) || []).forEach((modulo) => {
+      garantirGrupo(modulo.id, modulo.titulo);
+    });
 
     conteudos
       .filter((conteudo) => conteudo.turmaId === linha.turmaId)
@@ -202,7 +206,15 @@ export function SecaoCursosAluno({ avaliacoes = [], conteudos, cursos, matricula
       modulos,
       proximaAcao
     };
-  }, [avaliacoes, conteudos, linhasMatriculasAprovadas, matriculaEmDetalheId, progressoConteudoPorConteudoId, progressoModuloPorChave]);
+  }, [
+    avaliacoes,
+    conteudos,
+    linhasMatriculasAprovadas,
+    matriculaEmDetalheId,
+    modulosPorCursoId,
+    progressoConteudoPorConteudoId,
+    progressoModuloPorChave
+  ]);
 
   useEffect(() => {
     if (!detalheCursoSelecionado?.modulos.length) {
@@ -303,73 +315,79 @@ export function SecaoCursosAluno({ avaliacoes = [], conteudos, cursos, matricula
 
               {detalheCursoSelecionado.modulos.length ? (
                 <div className="student-course-detail__journey">
-                  {detalheCursoSelecionado.modulos.map((modulo) => (
-                    <article className="module-detail-card student-course-detail__module" key={modulo.id}>
-                      <button
-                        aria-expanded={Boolean(modulosAbertos[modulo.id])}
-                        className="student-course-detail__module-toggle"
-                        onClick={() => alternarModuloJornada(modulo.id)}
-                        type="button"
-                      >
-                        <div>
-                          <span>Modulo</span>
-                          <strong>{modulo.titulo}</strong>
-                        </div>
-                        <div className="student-course-detail__module-status">
-                          <StatusPill tone={progressStatusTone(modulo.status)}>{normalizeProgressStatus(modulo.status)}</StatusPill>
-                          <span aria-hidden="true">{modulosAbertos[modulo.id] ? "-" : "+"}</span>
-                        </div>
-                      </button>
+                  {detalheCursoSelecionado.modulos.map((modulo) => {
+                    const moduloSemConteudo = modulo.conteudos.length === 0;
 
-                      {modulosAbertos[modulo.id] ? (
-                        <div className="student-course-detail__module-body">
-                          <div className="student-content-card__progress">
-                            <StatusPill tone={progressStatusTone(modulo.status)}>
-                              {modulo.concluidos}/{modulo.conteudos.length} conteudo(s)
-                            </StatusPill>
-                            <div className="student-progress-bar" aria-hidden="true">
-                              <span style={{ width: `${Math.max(0, Math.min(modulo.progresso, 100))}%` }} />
-                            </div>
+                    return (
+                      <article className="module-detail-card student-course-detail__module" key={modulo.id}>
+                        <button
+                          aria-expanded={Boolean(modulosAbertos[modulo.id])}
+                          className="student-course-detail__module-toggle"
+                          onClick={() => alternarModuloJornada(modulo.id)}
+                          type="button"
+                        >
+                          <div>
+                            <span>Modulo</span>
+                            <strong>{modulo.titulo}</strong>
                           </div>
+                          <div className="student-course-detail__module-status">
+                            <StatusPill tone={moduloSemConteudo ? "info" : progressStatusTone(modulo.status)}>
+                              {moduloSemConteudo ? "Aguardando conteudos" : normalizeProgressStatus(modulo.status)}
+                            </StatusPill>
+                            <span aria-hidden="true">{modulosAbertos[modulo.id] ? "-" : "+"}</span>
+                          </div>
+                        </button>
 
-                          {modulo.conteudos.length ? (
-                            <ul className="student-course-detail__content-list">
-                              {modulo.conteudos.map((conteudo) => (
-                                <li key={conteudo.id}>
-                                  <span>{normalizeContentType(conteudo.tipoConteudo)}</span>
-                                  <strong>{conteudo.titulo}</strong>
-                                  <StatusPill tone={conteudo.concluido ? "success" : progressStatusTone(conteudo.statusProgresso)}>
-                                    {conteudo.concluido ? "Concluido" : normalizeProgressStatus(conteudo.statusProgresso)}
-                                  </StatusPill>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="student-course-note">Nenhum conteudo publicado neste modulo.</p>
-                          )}
-
-                          {modulo.avaliacoes.length ? (
-                            <div className="student-course-detail__evaluation-list">
-                              <span>Avaliacoes do modulo</span>
-                              {modulo.avaliacoes.map((avaliacao) => {
-                                const disponibilidade = obterDisponibilidadeAvaliacao(avaliacao);
-
-                                return (
-                                  <article key={avaliacao.id}>
-                                    <div>
-                                      <strong>{avaliacao.titulo}</strong>
-                                      <p>{normalizeEvaluationType(avaliacao.tipoAvaliacao)} - {avaliacao.totalQuestoes || 0} questao(oes)</p>
-                                    </div>
-                                    <StatusPill tone={disponibilidade.tone}>{disponibilidade.label}</StatusPill>
-                                  </article>
-                                );
-                              })}
+                        {modulosAbertos[modulo.id] ? (
+                          <div className="student-course-detail__module-body">
+                            <div className="student-content-card__progress">
+                              <StatusPill tone={moduloSemConteudo ? "info" : progressStatusTone(modulo.status)}>
+                                {moduloSemConteudo ? "Sem conteudos publicados" : `${modulo.concluidos}/${modulo.conteudos.length} conteudo(s)`}
+                              </StatusPill>
+                              <div className="student-progress-bar" aria-hidden="true">
+                                <span style={{ width: `${Math.max(0, Math.min(modulo.progresso, 100))}%` }} />
+                              </div>
                             </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </article>
-                  ))}
+
+                            {modulo.conteudos.length ? (
+                              <ul className="student-course-detail__content-list">
+                                {modulo.conteudos.map((conteudo) => (
+                                  <li key={conteudo.id}>
+                                    <span>{normalizeContentType(conteudo.tipoConteudo)}</span>
+                                    <strong>{conteudo.titulo}</strong>
+                                    <StatusPill tone={conteudo.concluido ? "success" : progressStatusTone(conteudo.statusProgresso)}>
+                                      {conteudo.concluido ? "Concluido" : normalizeProgressStatus(conteudo.statusProgresso)}
+                                    </StatusPill>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="student-course-note">Nenhum conteudo publicado neste modulo.</p>
+                            )}
+
+                            {modulo.avaliacoes.length ? (
+                              <div className="student-course-detail__evaluation-list">
+                                <span>Avaliacoes do modulo</span>
+                                {modulo.avaliacoes.map((avaliacao) => {
+                                  const disponibilidade = obterDisponibilidadeAvaliacao(avaliacao);
+
+                                  return (
+                                    <article key={avaliacao.id}>
+                                      <div>
+                                        <strong>{avaliacao.titulo}</strong>
+                                        <p>{normalizeEvaluationType(avaliacao.tipoAvaliacao)} - {avaliacao.totalQuestoes || 0} questao(oes)</p>
+                                      </div>
+                                      <StatusPill tone={disponibilidade.tone}>{disponibilidade.label}</StatusPill>
+                                    </article>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
                 </div>
               ) : (
                 <EmptyState message="Este curso ainda nao possui modulos publicados para a sua turma." />
@@ -749,30 +767,34 @@ export function SecaoAvaliacoesAluno({ avaliacoes, onRefresh, onSessionExpired }
   );
 }
 
-export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessionExpired, progressos = {} }) {
+export function SecaoConteudosAluno({ conteudos, cursos = [], matriculas, modulos = [], onRefresh, onSessionExpired, progressos = {}, turmas = [] }) {
   const [mensagem, setMensagem] = useState({ tone: "info", message: "" });
   const [conteudoProcessando, setConteudoProcessando] = useState(null);
   const [conteudosConcluidosLocais, setConteudosConcluidosLocais] = useState(() => new Set());
   const [conteudoSelecionadoId, setConteudoSelecionadoId] = useState(null);
-  const [detalheConteudoAberto, setDetalheConteudoAberto] = useState(true);
+  const [cursosAbertos, setCursosAbertos] = useState({});
   const [modulosAbertos, setModulosAbertos] = useState({});
+  const cursoPorId = useMemo(() => mapById(cursos), [cursos]);
+  const turmaPorId = useMemo(() => mapById(turmas), [turmas]);
+  const moduloPorId = useMemo(() => mapById(modulos), [modulos]);
+  const modulosPorCursoId = useMemo(() => agruparModulosPorCurso(modulos), [modulos]);
 
   const matriculasAprovadas = useMemo(
     () =>
       [...matriculas]
         .filter((matricula) => normalizeStatus(matricula.status) === "Aprovada")
         .sort((matriculaA, matriculaB) => {
-          const tituloCursoA = matriculaA.curso?.titulo || "";
-          const tituloCursoB = matriculaB.curso?.titulo || "";
+          const tituloCursoA = obterTituloCursoMatricula(matriculaA, cursoPorId);
+          const tituloCursoB = obterTituloCursoMatricula(matriculaB, cursoPorId);
           const comparacaoCurso = tituloCursoA.localeCompare(tituloCursoB, "pt-BR");
 
           if (comparacaoCurso !== 0) {
             return comparacaoCurso;
           }
 
-          return (matriculaA.turma?.nomeTurma || "").localeCompare(matriculaB.turma?.nomeTurma || "", "pt-BR");
+          return obterNomeTurmaMatricula(matriculaA, turmaPorId).localeCompare(obterNomeTurmaMatricula(matriculaB, turmaPorId), "pt-BR");
         }),
-    [matriculas]
+    [cursoPorId, matriculas, turmaPorId]
   );
 
   const progressosConteudos = progressos.conteudos || [];
@@ -823,35 +845,65 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
   const gruposConteudosPorCurso = useMemo(() => {
     const cursosMapeados = new Map();
 
-    conteudosOrdenados.forEach((conteudo) => {
-      const cursoId = Number(conteudo.cursoId);
-      const chaveCurso = cursoId || `curso-${conteudo.cursoTitulo || "sem-curso"}`;
+    function garantirCurso(cursoId, tituloCurso, chaveAlternativa = "") {
+      const chaveCurso = cursoId || `curso-${tituloCurso || chaveAlternativa || "sem-curso"}`;
       const acentoCurso = obterAcentoAcademico(chaveCurso);
       const curso = cursosMapeados.get(chaveCurso) || {
         id: chaveCurso,
         acento: acentoCurso,
-        titulo: conteudo.cursoTitulo || `Curso #${conteudo.cursoId}`,
+        titulo: tituloCurso || (cursoId ? `Curso #${cursoId}` : "Curso sem titulo"),
         turmas: new Set(),
         modulos: new Map(),
         totalConteudos: 0,
         concluidos: 0
       };
-      const moduloId = Number(conteudo.moduloId);
-      const chaveModulo = moduloId || `modulo-${conteudo.moduloTitulo || "sem-modulo"}`;
+
+      cursosMapeados.set(chaveCurso, curso);
+      return curso;
+    }
+
+    function garantirModulo(curso, moduloId, tituloModulo, dataCriacao = null) {
+      const chaveModulo = moduloId || `modulo-${tituloModulo || "sem-modulo"}`;
       const acentoModulo = obterAcentoAcademicoPorIndice(curso.acento.indice + curso.modulos.size + 1);
       const modulo = curso.modulos.get(chaveModulo) || {
         id: chaveModulo,
         acento: acentoModulo,
-        titulo: conteudo.moduloTitulo || "Modulo sem titulo",
+        titulo: tituloModulo || (moduloId ? `Modulo #${moduloId}` : "Modulo sem titulo"),
+        dataCriacao,
         conteudos: [],
         concluidos: 0
       };
+
+      if (!modulo.dataCriacao && dataCriacao) {
+        modulo.dataCriacao = dataCriacao;
+      }
+
+      curso.modulos.set(chaveModulo, modulo);
+      return modulo;
+    }
+
+    matriculasAprovadas.forEach((matricula) => {
+      const cursoId = Number(matricula.cursoId);
+      const curso = garantirCurso(cursoId, obterTituloCursoMatricula(matricula, cursoPorId), `matricula-${matricula.id}`);
+      curso.turmas.add(obterNomeTurmaMatricula(matricula, turmaPorId));
+
+      (modulosPorCursoId.get(cursoId) || []).forEach((modulo) => {
+        garantirModulo(curso, Number(modulo.id), modulo.titulo, modulo.dataCriacao);
+      });
+    });
+
+    conteudosOrdenados.forEach((conteudo) => {
+      const cursoId = Number(conteudo.cursoId);
+      const curso = garantirCurso(cursoId, conteudo.cursoTitulo || cursoPorId.get(cursoId)?.titulo, conteudo.turmaNome);
+      const moduloId = Number(conteudo.moduloId);
+      const moduloReferencia = moduloPorId.get(moduloId);
+      const modulo = garantirModulo(curso, moduloId, conteudo.moduloTitulo || moduloReferencia?.titulo, moduloReferencia?.dataCriacao);
       const progressoConteudo = progressoConteudoPorConteudoId.get(conteudo.id);
       const concluido = conteudosConcluidosLocais.has(conteudo.id) || estaConcluido(progressoConteudo);
       const progressoPercentual = concluido ? 100 : Number(progressoConteudo?.percentualConclusao || 0);
       const statusProgresso = concluido ? 3 : progressoConteudo?.statusProgresso || 1;
 
-      curso.turmas.add(conteudo.turmaNome || `Turma #${conteudo.turmaId}`);
+      curso.turmas.add(conteudo.turmaNome || turmaPorId.get(Number(conteudo.turmaId))?.nomeTurma || `Turma #${conteudo.turmaId}`);
       curso.totalConteudos += 1;
       curso.concluidos += concluido ? 1 : 0;
 
@@ -864,26 +916,45 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
         statusProgresso
       });
 
-      curso.modulos.set(chaveModulo, modulo);
-      cursosMapeados.set(chaveCurso, curso);
+      curso.modulos.set(modulo.id, modulo);
     });
 
     return [...cursosMapeados.values()].map((curso) => {
-      const modulos = [...curso.modulos.values()].map((modulo) => ({
-        ...modulo,
-        progresso: modulo.conteudos.length ? (modulo.concluidos / modulo.conteudos.length) * 100 : 0
-      }));
+      const modulos = [...curso.modulos.values()]
+        .map((modulo) => ({
+          ...modulo,
+          progresso: modulo.conteudos.length ? (modulo.concluidos / modulo.conteudos.length) * 100 : 0
+        }))
+        .sort((moduloA, moduloB) => {
+          const dataA = timestampFromApiDate(moduloA.dataCriacao);
+          const dataB = timestampFromApiDate(moduloB.dataCriacao);
+
+          if (dataA !== dataB) {
+            return dataA - dataB;
+          }
+
+          return (moduloA.titulo || "").localeCompare(moduloB.titulo || "", "pt-BR");
+        });
       const conteudosDoCurso = modulos.flatMap((modulo) => modulo.conteudos);
 
       return {
         ...curso,
-        turmas: [...curso.turmas].sort((left, right) => left.localeCompare(right, "pt-BR")),
+        turmas: [...curso.turmas].filter(Boolean).sort((left, right) => left.localeCompare(right, "pt-BR")),
         progresso: curso.totalConteudos ? (curso.concluidos / curso.totalConteudos) * 100 : 0,
         modulos,
         proximoConteudo: conteudosDoCurso.find((conteudo) => !conteudo.concluido) || conteudosDoCurso[0] || null
       };
     });
-  }, [conteudosConcluidosLocais, conteudosOrdenados, progressoConteudoPorConteudoId]);
+  }, [
+    conteudosConcluidosLocais,
+    conteudosOrdenados,
+    cursoPorId,
+    matriculasAprovadas,
+    moduloPorId,
+    modulosPorCursoId,
+    progressoConteudoPorConteudoId,
+    turmaPorId
+  ]);
 
   const conteudosDaTrilha = useMemo(
     () =>
@@ -908,6 +979,26 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
     () => conteudosDaTrilha.find((conteudo) => conteudo.id === conteudoSelecionadoId) || null,
     [conteudoSelecionadoId, conteudosDaTrilha]
   );
+
+  useEffect(() => {
+    setCursosAbertos((atuais) => {
+      const proximos = {};
+
+      gruposConteudosPorCurso.forEach((curso, index) => {
+        const possuiSelecionado = curso.modulos.some((modulo) => modulo.conteudos.some((conteudo) => conteudo.id === conteudoSelecionadoId));
+        proximos[curso.id] = Object.prototype.hasOwnProperty.call(atuais, curso.id)
+          ? atuais[curso.id]
+          : Boolean(possuiSelecionado || curso.proximoConteudo || index === 0);
+      });
+
+      const chavesAtuais = Object.keys(atuais);
+      const chavesProximas = Object.keys(proximos);
+      const semMudancas =
+        chavesAtuais.length === chavesProximas.length && chavesProximas.every((chave) => atuais[chave] === proximos[chave]);
+
+      return semMudancas ? atuais : proximos;
+    });
+  }, [conteudoSelecionadoId, gruposConteudosPorCurso]);
 
   useEffect(() => {
     setModulosAbertos((atuais) => {
@@ -937,9 +1028,8 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
       return;
     }
 
-    if (!conteudosDaTrilha.some((conteudo) => conteudo.id === conteudoSelecionadoId)) {
-      const proximoConteudo = conteudosDaTrilha.find((conteudo) => !conteudo.concluido) || conteudosDaTrilha[0];
-      setConteudoSelecionadoId(proximoConteudo.id);
+    if (conteudoSelecionadoId !== null && !conteudosDaTrilha.some((conteudo) => conteudo.id === conteudoSelecionadoId)) {
+      setConteudoSelecionadoId(null);
     }
   }, [conteudoSelecionadoId, conteudosDaTrilha]);
 
@@ -951,6 +1041,13 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
     setModulosAbertos((atuais) => (atuais[conteudoSelecionado.moduloChave] ? atuais : { ...atuais, [conteudoSelecionado.moduloChave]: true }));
   }, [conteudoSelecionado]);
 
+  function alternarCursoConteudos(chaveCurso) {
+    setCursosAbertos((atuais) => ({
+      ...atuais,
+      [chaveCurso]: !atuais[chaveCurso]
+    }));
+  }
+
   function alternarModuloConteudos(chaveModulo) {
     setModulosAbertos((atuais) => ({
       ...atuais,
@@ -958,9 +1055,9 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
     }));
   }
 
-  function selecionarConteudoAluno(conteudoId, chaveModulo) {
-    setConteudoSelecionadoId(conteudoId);
-    setDetalheConteudoAberto(true);
+  function selecionarConteudoAluno(conteudoId, chaveCurso, chaveModulo) {
+    setConteudoSelecionadoId((atual) => (atual === conteudoId ? null : conteudoId));
+    setCursosAbertos((atuais) => (atuais[chaveCurso] ? atuais : { ...atuais, [chaveCurso]: true }));
     setModulosAbertos((atuais) => (atuais[chaveModulo] ? atuais : { ...atuais, [chaveModulo]: true }));
   }
 
@@ -990,31 +1087,31 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
   }
 
   const resumoAluno = useMemo(() => {
-    const turmasUnicas = new Set(conteudosOrdenados.map((conteudo) => conteudo.turmaId)).size;
-    const modulosUnicos = new Set(conteudosOrdenados.map((conteudo) => conteudo.moduloId)).size;
+    const turmasUnicas = new Set(gruposConteudosPorCurso.flatMap((curso) => curso.turmas)).size;
+    const modulosUnicos = gruposConteudosPorCurso.reduce((total, curso) => total + curso.modulos.length, 0);
     const totalTextos = conteudosOrdenados.filter((conteudo) => Number(conteudo.tipoConteudo) === 1).length;
     const totalPdfs = conteudosOrdenados.filter((conteudo) => Number(conteudo.tipoConteudo) === 2).length;
     const totalRecursos = conteudosOrdenados.filter((conteudo) => [3, 4].includes(Number(conteudo.tipoConteudo))).length;
 
     return [
       `${matriculasAprovadas.length} matricula(s) ativa(s)`,
-      `${turmasUnicas} turma(s) com material`,
-      `${modulosUnicos} modulo(s) liberado(s)`,
+      `${gruposConteudosPorCurso.length} curso(s) em trilha`,
+      `${turmasUnicas} turma(s) ativa(s)`,
+      `${modulosUnicos} modulo(s) do curso`,
       `${formatPercent(calcularMediaGruposConteudo(gruposConteudosPorCurso))} de progresso`,
       `${totalTextos} texto(s)`,
       `${totalPdfs} pdf(s)`,
       `${totalRecursos} recurso(s)`
     ];
   }, [conteudosOrdenados, gruposConteudosPorCurso, matriculasAprovadas.length]);
-  const acaoConteudoSelecionado = conteudoSelecionado ? obterAcaoConteudoAluno(conteudoSelecionado) : null;
 
   return (
     <div className="content-section content-section--student">
       {mensagem.message ? <InlineMessage tone={mensagem.tone}>{mensagem.message}</InlineMessage> : null}
 
-      <div className={`student-study-layout${conteudoSelecionado && detalheConteudoAberto ? " student-study-layout--with-detail" : ""}`}>
+      <div className="student-study-layout">
         <PanelCard
-          description="Biblioteca em formato de trilha: abra um modulo, escolha um material e acompanhe o detalhe ao lado."
+          description="Biblioteca em formato de trilha: abra um curso, depois um modulo, e avance pelos materiais publicados."
           title="Biblioteca da sua trilha"
         >
           {gruposConteudosPorCurso.length ? (
@@ -1022,10 +1119,11 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
               {gruposConteudosPorCurso.map((curso) => {
                 const moduloDoProximo = curso.modulos.find((modulo) => modulo.conteudos.some((conteudo) => conteudo.id === curso.proximoConteudo?.id));
                 const chaveModuloProximo = moduloDoProximo ? obterChaveModuloConteudo(curso.id, moduloDoProximo.id) : "";
+                const cursoAberto = Boolean(cursosAbertos[curso.id]);
 
                 return (
                   <section
-                    className="student-content-course"
+                    className={`student-content-course${cursoAberto ? " student-content-course--open" : ""}`}
                     key={curso.id}
                     style={{
                       "--course-accent": curso.acento.solid,
@@ -1033,18 +1131,26 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
                       "--course-accent-soft": curso.acento.soft
                     }}
                   >
-                    <header className="student-content-course__header">
-                      <div>
+                    <button
+                      aria-expanded={cursoAberto}
+                      className="student-content-course__toggle"
+                      onClick={() => alternarCursoConteudos(curso.id)}
+                      type="button"
+                    >
+                      <span className="student-content-course__copy">
                         <span className="eyebrow">Curso</span>
-                        <h3>{curso.titulo}</h3>
-                        <p>{curso.turmas.join(", ")}</p>
-                      </div>
-                      <div className="student-content-course__summary">
+                        <strong>{curso.titulo}</strong>
+                        <span>{curso.turmas.length ? curso.turmas.join(", ") : "Turma em definicao"}</span>
+                      </span>
+                      <span className="student-content-course__summary">
                         <span className="chip">{curso.modulos.length} modulo{curso.modulos.length === 1 ? "" : "s"}</span>
                         <span className="chip">{curso.totalConteudos} material{curso.totalConteudos === 1 ? "" : "s"}</span>
                         <span className="chip">{formatPercent(curso.progresso)} de progresso</span>
-                      </div>
-                    </header>
+                        <span className="student-content-course__toggle-symbol" aria-hidden="true">
+                          {cursoAberto ? "-" : "+"}
+                        </span>
+                      </span>
+                    </button>
 
                     <div className="student-content-card__progress student-content-course__progress">
                       <div className="student-progress-bar" aria-hidden="true">
@@ -1052,193 +1158,147 @@ export function SecaoConteudosAluno({ conteudos, matriculas, onRefresh, onSessio
                       </div>
                     </div>
 
-                    {curso.proximoConteudo ? (
-                      <div className="student-content-course__next">
-                        <span>Continue de onde parou</span>
-                        <strong>{curso.proximoConteudo.titulo}</strong>
-                        <button
-                          className="table-action"
-                          onClick={() => selecionarConteudoAluno(curso.proximoConteudo.id, chaveModuloProximo)}
-                          type="button"
-                        >
-                          Abrir
-                        </button>
-                      </div>
-                    ) : null}
-
-                    <div className="student-content-module-list">
-                      {curso.modulos.map((modulo) => {
-                        const chaveModulo = obterChaveModuloConteudo(curso.id, modulo.id);
-                        const moduloAberto = Boolean(modulosAbertos[chaveModulo]);
-
-                        return (
-                          <article
-                            className="student-content-module"
-                            key={modulo.id}
-                            style={{
-                              "--module-accent": modulo.acento.solid,
-                              "--module-accent-border": modulo.acento.border,
-                              "--module-accent-soft": modulo.acento.soft
-                            }}
-                          >
+                    {cursoAberto ? (
+                      <>
+                        {curso.proximoConteudo ? (
+                          <div className="student-content-course__next">
+                            <span>Continue de onde parou</span>
+                            <strong>{curso.proximoConteudo.titulo}</strong>
                             <button
-                              aria-expanded={moduloAberto}
-                              className="student-content-module__toggle"
-                              onClick={() => alternarModuloConteudos(chaveModulo)}
+                              className="table-action"
+                              onClick={() => selecionarConteudoAluno(curso.proximoConteudo.id, curso.id, chaveModuloProximo)}
                               type="button"
                             >
-                              <span className="student-content-module__copy">
-                                <span>Modulo</span>
-                                <strong>{modulo.titulo}</strong>
-                              </span>
-                              <span className="student-content-module__summary">
-                                <StatusPill tone={modulo.concluidos === modulo.conteudos.length ? "success" : "warning"}>
-                                  {modulo.concluidos}/{modulo.conteudos.length} concluido{modulo.conteudos.length === 1 ? "" : "s"}
-                                </StatusPill>
-                                <span>{formatPercent(modulo.progresso)}</span>
-                                <span className="student-content-module__toggle-symbol" aria-hidden="true">
-                                  {moduloAberto ? "-" : "+"}
-                                </span>
-                              </span>
+                              Abrir
                             </button>
+                          </div>
+                        ) : null}
 
-                            {moduloAberto ? (
-                              <div className="student-content-compact-list">
-                                {modulo.conteudos.map((conteudo) => {
-                                  const acao = obterAcaoConteudoAluno(conteudo);
-                                  const processando = conteudoProcessando === conteudo.id;
-                                  const conteudoAtivo = conteudoSelecionadoId === conteudo.id;
+                        <div className="student-content-module-list">
+                          {curso.modulos.map((modulo) => {
+                            const chaveModulo = obterChaveModuloConteudo(curso.id, modulo.id);
+                            const moduloAberto = Boolean(modulosAbertos[chaveModulo]);
+                            const moduloSemConteudo = modulo.conteudos.length === 0;
 
-                                  return (
-                                    <article
-                                      className={`student-content-item${conteudoAtivo ? " student-content-item--active" : ""}`}
-                                      key={conteudo.id}
-                                    >
-                                      <button
-                                        className="student-content-item__main"
-                                        onClick={() => selecionarConteudoAluno(conteudo.id, chaveModulo)}
-                                        type="button"
-                                      >
-                                        <span className="student-content-item__order">
-                                          {typeof conteudo.ordemExibicao === "number" ? String(conteudo.ordemExibicao).padStart(2, "0") : "--"}
-                                        </span>
-                                        <span className="student-content-item__copy">
-                                          <span>{normalizeContentType(conteudo.tipoConteudo)}</span>
-                                          <strong>{conteudo.titulo}</strong>
-                                        </span>
-                                      </button>
+                            return (
+                              <article
+                                className="student-content-module"
+                                key={modulo.id}
+                                style={{
+                                  "--module-accent": modulo.acento.solid,
+                                  "--module-accent-border": modulo.acento.border,
+                                  "--module-accent-soft": modulo.acento.soft
+                                }}
+                              >
+                                <button
+                                  aria-expanded={moduloAberto}
+                                  className="student-content-module__toggle"
+                                  onClick={() => alternarModuloConteudos(chaveModulo)}
+                                  type="button"
+                                >
+                                  <span className="student-content-module__copy">
+                                    <span>Modulo</span>
+                                    <strong>{modulo.titulo}</strong>
+                                  </span>
+                                  <span className="student-content-module__summary">
+                                    <StatusPill tone={moduloSemConteudo ? "info" : modulo.concluidos === modulo.conteudos.length ? "success" : "warning"}>
+                                      {moduloSemConteudo
+                                        ? "Aguardando conteudos"
+                                        : `${modulo.concluidos}/${modulo.conteudos.length} concluido${modulo.conteudos.length === 1 ? "" : "s"}`}
+                                    </StatusPill>
+                                    <span>{formatPercent(modulo.progresso)}</span>
+                                    <span className="student-content-module__toggle-symbol" aria-hidden="true">
+                                      {moduloAberto ? "-" : "+"}
+                                    </span>
+                                  </span>
+                                </button>
 
-                                      <div className="student-content-item__status">
-                                        <StatusPill tone={conteudo.concluido ? "success" : progressStatusTone(conteudo.statusProgresso)}>
-                                          {conteudo.concluido ? "Concluido" : normalizeProgressStatus(conteudo.statusProgresso)}
-                                        </StatusPill>
-                                        <span>{formatPercent(conteudo.progressoPercentual)}</span>
-                                      </div>
+                                {moduloAberto ? (
+                                  <div className="student-content-compact-list">
+                                    {modulo.conteudos.length ? (
+                                      modulo.conteudos.map((conteudo) => {
+                                        const acao = obterAcaoConteudoAluno(conteudo);
+                                        const processando = conteudoProcessando === conteudo.id;
+                                        const conteudoAtivo = conteudoSelecionadoId === conteudo.id;
 
-                                      <div className="student-content-item__actions">
-                                        {acao ? (
-                                          <a className="student-content-card__link" href={acao.href} rel="noreferrer" target="_blank">
-                                            {acao.label}
-                                          </a>
-                                        ) : null}
-                                        {!conteudo.concluido ? (
-                                          <button
-                                            className="table-action"
-                                            disabled={processando}
-                                            onClick={() => marcarConteudoConcluido(conteudo.id)}
-                                            type="button"
+                                        return (
+                                          <article
+                                            className={`student-content-item${conteudoAtivo ? " student-content-item--active" : ""}`}
+                                            key={conteudo.id}
                                           >
-                                            {processando ? "Salvando..." : "Concluir"}
-                                          </button>
-                                        ) : null}
-                                      </div>
-                                    </article>
-                                  );
-                                })}
-                              </div>
-                            ) : null}
-                          </article>
-                        );
-                      })}
-                    </div>
+                                            <button
+                                              aria-expanded={conteudoAtivo}
+                                              className="student-content-item__main"
+                                              onClick={() => selecionarConteudoAluno(conteudo.id, curso.id, chaveModulo)}
+                                              type="button"
+                                            >
+                                              <span className="student-content-item__order">
+                                                {typeof conteudo.ordemExibicao === "number" ? String(conteudo.ordemExibicao).padStart(2, "0") : "--"}
+                                              </span>
+                                              <span className="student-content-item__copy">
+                                                <span>{normalizeContentType(conteudo.tipoConteudo)}</span>
+                                                <strong>{conteudo.titulo}</strong>
+                                              </span>
+                                            </button>
+
+                                            <div className="student-content-item__status">
+                                              <StatusPill tone={conteudo.concluido ? "success" : progressStatusTone(conteudo.statusProgresso)}>
+                                                {conteudo.concluido ? "Concluido" : normalizeProgressStatus(conteudo.statusProgresso)}
+                                              </StatusPill>
+                                              <span>{formatPercent(conteudo.progressoPercentual)}</span>
+                                            </div>
+
+                                            <div className="student-content-item__actions">
+                                              {acao ? (
+                                                <a className="student-content-card__link" href={acao.href} rel="noreferrer" target="_blank">
+                                                  {acao.label}
+                                                </a>
+                                              ) : null}
+                                              {!conteudo.concluido ? (
+                                                <button
+                                                  className="table-action"
+                                                  disabled={processando}
+                                                  onClick={() => marcarConteudoConcluido(conteudo.id)}
+                                                  type="button"
+                                                >
+                                                  {processando ? "Salvando..." : "Concluir"}
+                                                </button>
+                                              ) : null}
+                                            </div>
+
+                                            {conteudoAtivo ? (
+                                              <div className="student-content-item__detail">
+                                                <p>{obterPreviaConteudoAluno(conteudo)}</p>
+                                                {conteudo.corpoTexto ? <p>{conteudo.corpoTexto}</p> : null}
+                                                <span>
+                                                  {conteudo.publicadoEm
+                                                    ? `Publicado em ${formatDate(conteudo.publicadoEm)}`
+                                                    : `Atualizado em ${formatDate(conteudo.atualizadoEm || conteudo.criadoEm)}`}
+                                                </span>
+                                              </div>
+                                            ) : null}
+                                          </article>
+                                        );
+                                      })
+                                    ) : (
+                                      <p className="student-content-module__empty">Nenhum material publicado neste modulo ainda.</p>
+                                    )}
+                                  </div>
+                                ) : null}
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : null}
                   </section>
                 );
               })}
             </div>
           ) : (
-            <EmptyState message="Nenhum conteudo publicado foi liberado para as suas turmas ate agora." />
+            <EmptyState message="Quando uma matricula for aprovada, os cursos e modulos da sua trilha aparecerao aqui." />
           )}
         </PanelCard>
-
-        {conteudoSelecionado && detalheConteudoAberto ? (
-          <aside
-            className="student-content-detail"
-            style={{ "--course-accent": conteudoSelecionado.cursoAcento.solid }}
-            aria-label="Detalhe do conteudo selecionado"
-          >
-            <PanelCard description={`${conteudoSelecionado.cursoTitulo} - ${conteudoSelecionado.moduloTitulo}`} title={conteudoSelecionado.titulo}>
-              <div className="module-detail-panel-actions">
-                <button className="table-action module-detail-close" onClick={() => setDetalheConteudoAberto(false)} type="button">
-                  Fechar detalhe
-                </button>
-              </div>
-
-              <div className="student-content-detail__meta">
-                <span className="chip">{normalizeContentType(conteudoSelecionado.tipoConteudo)}</span>
-                <StatusPill tone={publicationStatusTone(conteudoSelecionado.statusPublicacao)}>
-                  {normalizePublicationStatus(conteudoSelecionado.statusPublicacao)}
-                </StatusPill>
-                <StatusPill tone={progressStatusTone(conteudoSelecionado.statusProgresso)}>
-                  {normalizeProgressStatus(conteudoSelecionado.statusProgresso)}
-                </StatusPill>
-              </div>
-
-              <div className="student-content-card__progress">
-                <span className="student-content-detail__progress-label">{formatPercent(conteudoSelecionado.progressoPercentual)} de progresso</span>
-                <div className="student-progress-bar" aria-hidden="true">
-                  <span style={{ width: `${Math.max(0, Math.min(conteudoSelecionado.progressoPercentual, 100))}%` }} />
-                </div>
-              </div>
-
-              <p className="student-content-card__summary">{obterPreviaConteudoAluno(conteudoSelecionado)}</p>
-
-              {conteudoSelecionado.corpoTexto ? (
-                <div className="student-content-detail__body">
-                  <span>Conteudo</span>
-                  <p>{conteudoSelecionado.corpoTexto}</p>
-                </div>
-              ) : null}
-
-              <div className="student-content-detail__footer">
-                <span>
-                  {conteudoSelecionado.publicadoEm
-                    ? `Publicado em ${formatDate(conteudoSelecionado.publicadoEm)}`
-                    : `Atualizado em ${formatDate(conteudoSelecionado.atualizadoEm || conteudoSelecionado.criadoEm)}`}
-                </span>
-
-                <div className="student-content-card__actions">
-                  {acaoConteudoSelecionado ? (
-                    <a className="student-content-card__link" href={acaoConteudoSelecionado.href} rel="noreferrer" target="_blank">
-                      {acaoConteudoSelecionado.label}
-                    </a>
-                  ) : (
-                    <span className="student-content-card__note">Leitura disponivel no proprio painel.</span>
-                  )}
-                  {!conteudoSelecionado.concluido ? (
-                    <button
-                      className="table-action"
-                      disabled={conteudoProcessando === conteudoSelecionado.id}
-                      onClick={() => marcarConteudoConcluido(conteudoSelecionado.id)}
-                      type="button"
-                    >
-                      {conteudoProcessando === conteudoSelecionado.id ? "Salvando..." : "Marcar concluido"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </PanelCard>
-          </aside>
-        ) : null}
       </div>
 
       <section className="content-section__intro">
@@ -1307,6 +1367,18 @@ function obterProximaAcaoCurso(modulos) {
     to: "/app/avaliacoes"
   };
     }
+  }
+
+  const totalPublicacoes = modulos.reduce((total, modulo) => total + modulo.conteudos.length + modulo.avaliacoes.length, 0);
+  if (modulos.length && totalPublicacoes === 0) {
+    return {
+      moduloId: modulos[0]?.id || null,
+      titulo: "Aguardando publicacoes",
+      descricao: "Os modulos do curso ja estao definidos; os materiais aparecerao assim que forem publicados.",
+      label: "Sem publicacoes",
+      tone: "info",
+      to: null
+    };
   }
 
   return {
@@ -1412,6 +1484,54 @@ function calcularMediaGruposConteudo(gruposConteudosPorCurso) {
 
 function obterChaveModuloConteudo(cursoId, moduloId) {
   return `${cursoId || "curso"}-${moduloId || "modulo"}`;
+}
+
+function agruparModulosPorCurso(modulos) {
+  const grupos = new Map();
+
+  modulos.forEach((modulo) => {
+    const cursoId = Number(modulo.cursoId);
+    if (!cursoId) {
+      return;
+    }
+
+    if (!grupos.has(cursoId)) {
+      grupos.set(cursoId, []);
+    }
+
+    grupos.get(cursoId).push(modulo);
+  });
+
+  grupos.forEach((itens) => {
+    itens.sort((moduloA, moduloB) => {
+      const dataA = timestampFromApiDate(moduloA.dataCriacao);
+      const dataB = timestampFromApiDate(moduloB.dataCriacao);
+
+      if (dataA !== dataB) {
+        return dataA - dataB;
+      }
+
+      return (moduloA.titulo || "").localeCompare(moduloB.titulo || "", "pt-BR");
+    });
+  });
+
+  return grupos;
+}
+
+function obterTituloCursoMatricula(matricula, cursoPorId) {
+  const cursoId = Number(matricula.cursoId);
+  const curso = cursoPorId.get(cursoId);
+  const cursoDaMatricula = typeof matricula.curso === "string" ? matricula.curso : matricula.curso?.titulo;
+
+  return curso?.titulo || cursoDaMatricula || matricula.cursoTitulo || (cursoId ? `Curso #${cursoId}` : "Curso sem titulo");
+}
+
+function obterNomeTurmaMatricula(matricula, turmaPorId) {
+  const turmaId = Number(matricula.turmaId || matricula.turma?.id);
+  const turma = turmaPorId.get(turmaId);
+  const turmaDaMatricula = typeof matricula.turma === "string" ? matricula.turma : matricula.turma?.nomeTurma;
+
+  return turma?.nomeTurma || turmaDaMatricula || matricula.nomeTurma || (turmaId ? `Turma #${turmaId}` : "Turma em definicao");
 }
 
 function obterIndiceAcentoAcademico(valor) {

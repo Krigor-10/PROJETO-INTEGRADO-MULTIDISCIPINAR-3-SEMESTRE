@@ -38,6 +38,19 @@ public class ModuloRepository : GenericRepository<Modulo>, IModuloRepository
             .ToListAsync();
     }
 
+    public async Task<List<Modulo>> ObterPorAlunoAsync(int alunoId)
+    {
+        return await Context.Modulos
+            .Where(modulo => Context.Matriculas.Any(matricula =>
+                matricula.AlunoId == alunoId &&
+                matricula.Status == StatusMatricula.Aprovada &&
+                matricula.CursoId == modulo.CursoId))
+            .OrderBy(modulo => modulo.CursoId)
+            .ThenBy(modulo => modulo.DataCriacao)
+            .ThenBy(modulo => modulo.Titulo)
+            .ToListAsync();
+    }
+
     public async Task<bool> PossuiDependenciasAsync(int moduloId)
     {
         return await Context.ConteudosDidaticos.AnyAsync(item => item.ModuloId == moduloId) ||

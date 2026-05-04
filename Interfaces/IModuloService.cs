@@ -8,6 +8,7 @@ public interface IModuloService
     Task<Modulo> ObterModuloPorIdAsync(int id);
     Task<IEnumerable<Modulo>> ListarModulosAsync();
     Task<IEnumerable<Modulo>> ListarModulosPorProfessorAsync(int professorId);
+    Task<IEnumerable<Modulo>> ListarModulosPorAlunoAsync(int alunoId);
     Task<IEnumerable<Modulo>> ListarModulosPorCursoAsync(int cursoId);
     Task<Modulo> AtualizarModuloAsync(int id, string titulo);
     Task ExcluirModuloAsync(int id);

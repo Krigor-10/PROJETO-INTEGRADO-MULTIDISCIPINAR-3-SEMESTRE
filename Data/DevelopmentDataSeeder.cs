@@ -796,10 +796,28 @@ public static class DevelopmentDataSeeder
 
     private static async Task EnsurePendingEnrollmentAsync(PlataformaContext context, Aluno student, Curso course)
     {
-        var enrollment = await context.Matriculas.FirstOrDefaultAsync(item =>
-            item.AlunoId == student.Id &&
-            item.CursoId == course.Id &&
-            item.Status == StatusMatricula.Pendente);
+        var enrollments = await context.Matriculas
+            .Where(item =>
+                item.AlunoId == student.Id &&
+                item.CursoId == course.Id)
+            .OrderBy(item => item.DataSolicitacao)
+            .ThenBy(item => item.Id)
+            .ToListAsync();
+
+        var activeEnrollment = enrollments.FirstOrDefault(item => item.Status == StatusMatricula.Aprovada);
+        if (activeEnrollment is not null)
+        {
+            await EnsureEnrollmentRegistrationCodeAsync(context, activeEnrollment);
+
+            foreach (var pendingDuplicate in enrollments.Where(item => item.Status == StatusMatricula.Pendente))
+            {
+                pendingDuplicate.Cancelar();
+            }
+
+            return;
+        }
+
+        var enrollment = enrollments.FirstOrDefault(item => item.Status == StatusMatricula.Pendente);
 
         if (enrollment is not null)
         {

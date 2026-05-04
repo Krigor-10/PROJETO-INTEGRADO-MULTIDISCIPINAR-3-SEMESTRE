@@ -54,6 +54,8 @@ export async function demoRequest(endpoint, options = {}) {
       return listModules();
     case path === "/Modulos/meus" && method === "GET":
       return listTeacherModules();
+    case /^\/Modulos\/aluno\/\d+$/.test(path) && method === "GET":
+      return listStudentModules(getNumericId(path));
     case path === "/Modulos" && method === "POST":
       return createModule(payload);
     case /^\/Modulos\/\d+$/.test(path) && method === "PUT":
@@ -464,6 +466,31 @@ function listTeacherModules() {
     .sort((left, right) => left.titulo.localeCompare(right.titulo, "pt-BR"));
 }
 
+function listStudentModules(studentId) {
+  const user = requireAuthenticatedUser();
+
+  if (!MANAGER_ROLES.has(user.tipoUsuario) && user.id !== studentId) {
+    throw new DemoApiError("Voce nao pode visualizar modulos demo de outro usuario.", 403);
+  }
+
+  const db = readDemoDb();
+  const approvedCourseIds = new Set(
+    db.matriculas
+      .filter((matricula) => matricula.alunoId === studentId && Number(matricula.status) === 1)
+      .map((matricula) => matricula.cursoId)
+  );
+
+  return clone(db.modulos)
+    .filter((modulo) => approvedCourseIds.has(modulo.cursoId))
+    .sort((left, right) => {
+      if (left.cursoId !== right.cursoId) {
+        return left.cursoId - right.cursoId;
+      }
+
+      return left.titulo.localeCompare(right.titulo, "pt-BR");
+    });
+}
+
 function createModule(payload) {
   requireManager();
 
@@ -619,19 +646,43 @@ function approveEnrollmentInDb(db, enrollmentId, turmaIdOverride = null) {
   }
 
   const turma = resolveDemoEnrollmentClass(db, matricula, turmaIdOverride);
-  const duplicatedEnrollment = db.matriculas.some(
+  const approvedEnrollment = db.matriculas.find(
     (item) =>
       item.id !== matricula.id &&
       item.alunoId === matricula.alunoId &&
       item.turmaId === turma.id &&
-      ![2, 3].includes(Number(item.status))
+      Number(item.status) === 1
   );
 
-  if (duplicatedEnrollment) {
-    throw new DemoApiError("O aluno ja possui matricula ativa nesta turma.", 422);
+  const aluno = db.alunos.find((item) => item.id === matricula.alunoId);
+
+  if (approvedEnrollment) {
+    matricula.status = 3;
+    if (aluno) {
+      ensureDemoStudentRegistrationCode(db, aluno);
+      aluno.turmaAtual = turma.nomeTurma;
+    }
+
+    return {
+      matriculaId: approvedEnrollment.id,
+      codigoRegistro: approvedEnrollment.codigoRegistro || "",
+      cursoId: approvedEnrollment.cursoId,
+      turmaId: turma.id,
+      nomeTurma: turma.nomeTurma || ""
+    };
   }
 
-  const aluno = db.alunos.find((item) => item.id === matricula.alunoId);
+  const duplicatedPendingEnrollment = db.matriculas.some(
+    (item) =>
+      item.id !== matricula.id &&
+      item.alunoId === matricula.alunoId &&
+      item.turmaId === turma.id &&
+      Number(item.status) === 0
+  );
+
+  if (duplicatedPendingEnrollment) {
+    throw new DemoApiError("O aluno ja possui outra matricula pendente nesta turma.", 422);
+  }
 
   if (!matricula.codigoRegistro) {
     matricula.codigoRegistro = nextDemoRegistrationCode(db.matriculas, "MAT");
