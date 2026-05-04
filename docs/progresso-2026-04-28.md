@@ -353,3 +353,21 @@ ficar escolhendo cada curso para cada aluno, quero aprovação em massa e o sistem
 - Aplicacao real ficou disponivel em `http://127.0.0.1:5019` usando o DLL Release.
 - Smoke HTTP confirmou que `wwwroot/index.html` referencia os bundles atuais `index-Df1JUE0A.js` e `index-CHMu3c2a.css`.
 - Consulta no LocalDB confirmou `pendentes_aluno_teste_01=0` e `PendenciasDuplicadas=0`.
+## Proximo ajuste - Refatoracao CSS semantica
+
+- Reorganizar os arquivos `.css` do frontend com nomes semanticos em portugues para facilitar identificacao e manutencao.
+- Separar sem alterar visual primeiro, validando build antes de qualquer renomeacao mais profunda de classes.
+- Aproveitar a refatoracao para identificar e remover codigo morto, estilos nao usados e componentes/variaveis obsoletos com validacao depois de cada limpeza.
+- Sugestao inicial: `base.css`, `publico.css`, `workspace.css`, `aluno.css`, `gestao.css`, `professor.css` e `componentes.css`.
+## Proximo ajuste - Aba Coordenadores no Admin
+
+- Adicionar uma aba `Coordenadores` no acesso do Admin para gerenciar usuarios coordenadores.
+- A tela deve permitir visualizar coordenadores cadastrados e preparar o fluxo para cadastro/edicao conforme o mesmo padrao das demais abas administrativas.
+- Verificar backend, demo mode e menu lateral do workspace para manter paridade entre ambiente real e demonstracao.
+## Melhoria futura - Navegacao global e menu lateral
+
+- Adicionar uma navegacao global para os perfis `Admin`, `Coordenador` e `Professor`, facilitando troca entre areas principais sem depender apenas do menu lateral.
+- Reorganizar o menu lateral do workspace por grupos semanticos, separando gestao academica, operacao, conteudos/avaliacoes e perfil/sessao.
+- Preservar a experiencia do aluno ja focada em `Meus cursos`, `Conteudos`, `Avaliacoes` e `Matriculas`, ajustando apenas se houver ganho claro de navegacao.
+- Validar responsividade desktop/mobile para evitar menus longos, duplicados ou com acoes importantes escondidas.
+- Reduzir o menu/modal de perfil do usuario para informacoes essenciais, mantendo identificacao, perfil, contato principal e acoes de sessao sem excesso de detalhes.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { DataTable, InlineMessage, PanelCard } from "../../components/Primitives.jsx";
+import { DataTable, InlineMessage, PanelCard, StatusPill } from "../../components/Primitives.jsx";
 import { ApiError, apiRequest } from "../../lib/api.js";
 import { compactText } from "../../lib/format.js";
 
@@ -81,7 +81,7 @@ export function SecaoCursos({
     }
 
     if (!termoBusca) {
-      return proximosCursos;
+      return [...proximosCursos].sort((left, right) => String(left.titulo || "").localeCompare(String(right.titulo || ""), "pt-BR"));
     }
 
     return proximosCursos.filter((curso) => {
@@ -99,7 +99,7 @@ export function SecaoCursos({
       ];
 
       return campos.some((campo) => normalizarBusca(campo).includes(termoBusca));
-    });
+    }).sort((left, right) => String(left.titulo || "").localeCompare(String(right.titulo || ""), "pt-BR"));
   }, [coordenadorPorId, cursos, ehAdmin, filtroCoordenador, resumoPorCursoId, termoBusca]);
   const idsCursos = useMemo(() => new Set(cursosFiltrados.map((curso) => curso.id)), [cursosFiltrados]);
   const cursosMarcados = useMemo(
@@ -223,6 +223,62 @@ export function SecaoCursos({
     onAbrirSecaoCurso?.(section, curso);
   }
 
+  function renderCursoPrincipal(curso) {
+    return (
+      <div className="course-admin-cell">
+        <span className="chip">{curso.codigoRegistro || "Sem codigo"}</span>
+        <div>
+          <strong>{curso.titulo}</strong>
+          <p>{compactText(curso.descricao, 128)}</p>
+        </div>
+      </div>
+    );
+  }
+
+  function renderEstruturaAcademica(curso) {
+    const resumo = resumoPorCursoId.get(curso.id) || { modulos: 0, turmas: 0, matriculas: 0 };
+
+    return (
+      <div className="table-cell-stack">
+        <strong>{resumo.modulos} modulo{resumo.modulos === 1 ? "" : "s"}</strong>
+        <p>{resumo.turmas ? "Turma padrao configurada" : "Turma padrao pendente"}</p>
+        <div className="table-badge-list">
+          <span className="chip">{resumo.matriculas} matricula{resumo.matriculas === 1 ? "" : "s"}</span>
+          <span className="chip">{resumo.turmas} turma{resumo.turmas === 1 ? "" : "s"}</span>
+        </div>
+      </div>
+    );
+  }
+
+  function renderCoordenacao(curso) {
+    const coordenador = curso.coordenadorId ? coordenadorPorId.get(curso.coordenadorId) : null;
+    const nomeCoordenador = coordenador?.nome || (curso.coordenadorId ? `Usuario #${curso.coordenadorId}` : "Nao atribuida");
+
+    return (
+      <div className="table-cell-stack">
+        <StatusPill tone={coordenador || curso.coordenadorId ? "success" : "warning"}>
+          {coordenador || curso.coordenadorId ? "Coordenado" : "Pendente"}
+        </StatusPill>
+        <p>{nomeCoordenador}</p>
+      </div>
+    );
+  }
+
+  function renderAcoesCurso(curso) {
+    return (
+      <div className="table-actions table-actions--compact">
+        {!ehProfessor ? (
+          <button className="table-action" onClick={() => abrirSecaoRelacionada("modulos", curso)} type="button">
+            Ver modulos
+          </button>
+        ) : null}
+        <button className="table-action" onClick={() => abrirSecaoRelacionada("turmas", curso)} type="button">
+          Ver turma padrao
+        </button>
+      </div>
+    );
+  }
+
   function renderBarraAtribuicao() {
     if (!ehAdmin) {
       return null;
@@ -323,54 +379,10 @@ export function SecaoCursos({
 
   const colunas = [
     ...(ehAdmin ? [{ key: "selecionar", label: "Selecionar", render: renderSelecao }] : []),
-    { key: "codigoRegistro", label: "CODIGO DO CURSO", render: (curso) => curso.codigoRegistro || "Sem codigo" },
-    { key: "titulo", label: "Titulo" },
-    { key: "descricao", label: "Descricao", render: (curso) => compactText(curso.descricao, 90) },
-    {
-      key: "estrutura",
-      label: "Estrutura",
-      render: (curso) => {
-        const resumo = resumoPorCursoId.get(curso.id) || { modulos: 0, turmas: 0, matriculas: 0 };
-
-        return (
-          <div className="table-cell-stack">
-            <strong>Fluxo do curso</strong>
-            <div className="table-badge-list">
-              <span className="chip">{resumo.modulos} modulo{resumo.modulos === 1 ? "" : "s"}</span>
-              <span className="chip">{resumo.turmas ? "Turma padrao configurada" : "Turma padrao pendente"}</span>
-              <span className="chip">{resumo.matriculas} matricula{resumo.matriculas === 1 ? "" : "s"}</span>
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      key: "coordenacao",
-      label: "Coordenacao",
-      render: (curso) => {
-        const coordenador = curso.coordenadorId ? coordenadorPorId.get(curso.coordenadorId) : null;
-        return coordenador?.nome || (curso.coordenadorId ? `Usuario #${curso.coordenadorId}` : "Nao atribuida");
-      }
-    },
-    {
-      key: "acessos",
-      label: "Acessos",
-      render: (curso) => (
-        <div className="table-cell-stack">
-          <strong>Explorar curso</strong>
-          <div className="table-badge-list">
-            {!ehProfessor ? (
-              <button className="table-action" onClick={() => abrirSecaoRelacionada("modulos", curso)} type="button">
-                Ver modulos
-              </button>
-            ) : null}
-            <button className="table-action" onClick={() => abrirSecaoRelacionada("turmas", curso)} type="button">
-              Ver turma padrao
-            </button>
-          </div>
-        </div>
-      )
-    }
+    { key: "curso", label: "Curso", render: renderCursoPrincipal },
+    { key: "estrutura", label: "Estrutura academica", render: renderEstruturaAcademica },
+    { key: "coordenacao", label: "Coordenacao", render: renderCoordenacao },
+    { key: "acoes", label: "Acoes", render: renderAcoesCurso }
   ];
 
   return (
