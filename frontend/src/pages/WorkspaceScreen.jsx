@@ -3,6 +3,7 @@ import { InlineMessage, PanelCard, RouteLink, StatusPill } from "../components/P
 import { SecaoAlunos } from "./workspace/SecaoAlunos.jsx";
 import { SecaoAvaliacoesProfessor } from "./workspace/SecaoAvaliacoesProfessor.jsx";
 import { SecaoConteudosProfessor } from "./workspace/SecaoConteudosProfessor.jsx";
+import { SecaoCoordenadores } from "./workspace/SecaoCoordenadores.jsx";
 import { SecaoCursos } from "./workspace/SecaoCursos.jsx";
 import { SecaoModulos } from "./workspace/SecaoModulos.jsx";
 import { SecaoAvaliacoesAluno, SecaoConteudosAluno, SecaoCursosAluno } from "./workspace/SecoesAluno.jsx";
@@ -692,6 +693,15 @@ export default function WorkspaceScreen({
                 onSessionExpired={onSessionExpired}
                 professores={snapshot.professores}
                 turmas={snapshot.turmas}
+              />
+            ) : null}
+
+            {activeSection === "coordenadores" ? (
+              <SecaoCoordenadores
+                coordenadores={snapshot.coordenadores}
+                cursos={snapshot.cursos}
+                onRefresh={() => setRefreshKey((current) => current + 1)}
+                onSessionExpired={onSessionExpired}
               />
             ) : null}
 

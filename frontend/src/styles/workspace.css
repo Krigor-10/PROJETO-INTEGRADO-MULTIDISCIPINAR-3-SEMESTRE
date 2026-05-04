@@ -489,14 +489,16 @@
 }
 
 .module-title-cell,
-.module-course-cell > div {
+.module-course-cell > div,
+.module-course-summary {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
 .module-title-cell strong,
-.module-course-cell .course-preview-cell__name {
+.module-course-cell .course-preview-cell__name,
+.module-course-summary strong {
   color: var(--ink-strong);
   line-height: 1.32;
   overflow-wrap: anywhere;
@@ -504,6 +506,7 @@
 
 .module-title-cell span,
 .module-course-cell small,
+.module-course-summary span,
 .module-popup-list li span {
   color: var(--ink-soft);
   font-size: 0.76rem;
@@ -525,6 +528,34 @@
 
 .module-popup-list li strong {
   overflow-wrap: anywhere;
+}
+
+.module-accordion-table .module-course-row,
+.module-accordion-table .module-course-row:nth-child(even) {
+  background: rgba(123, 47, 247, 0.08);
+}
+
+.module-accordion-table .module-course-row:hover,
+.module-accordion-table .module-course-row--expanded,
+.module-accordion-table .module-course-row--expanded:nth-child(even) {
+  background: rgba(123, 47, 247, 0.12);
+}
+
+.module-accordion-table .module-child-row {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.module-accordion-table .module-child-row td:first-child {
+  border-left: 3px solid rgba(134, 239, 172, 0.38);
+}
+
+.module-course-toggle {
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.module-course-toggle--open {
+  background: rgba(34, 197, 94, 0.28);
+  border-color: rgba(134, 239, 172, 0.5);
 }
 
 .module-detail-panel-actions {
@@ -1891,6 +1922,7 @@
   transform: translateY(-1px);
 }
 
+.coordinator-course-list,
 .professor-course-list,
 .student-course-list {
   display: grid;
@@ -1900,6 +1932,7 @@
   padding: 0;
 }
 
+.coordinator-course-list li,
 .professor-course-list li,
 .student-course-list li {
   background: rgba(255, 255, 255, 0.04);

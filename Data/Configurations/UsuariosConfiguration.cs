@@ -48,6 +48,15 @@ public sealed class CoordenadorConfiguration : IEntityTypeConfiguration<Coordena
     public void Configure(EntityTypeBuilder<Coordenador> builder)
     {
         builder.ToTable("Coordenadores");
+
+        builder
+            .Property(c => c.CodigoRegistro)
+            .HasMaxLength(16)
+            .IsRequired();
+
+        builder
+            .HasIndex(c => c.CodigoRegistro)
+            .IsUnique();
     }
 }
 

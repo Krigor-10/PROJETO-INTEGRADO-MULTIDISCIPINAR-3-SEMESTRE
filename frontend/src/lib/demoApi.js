@@ -38,6 +38,8 @@ export async function demoRequest(endpoint, options = {}) {
       return listStudents();
     case path === "/Coordenadores" && method === "GET":
       return listCoordinators();
+    case path === "/Coordenadores" && method === "POST":
+      return createCoordinator(payload);
     case path === "/Professores" && method === "GET":
       return listProfessors();
     case path === "/Professores" && method === "POST":
@@ -284,6 +286,70 @@ function listCoordinators() {
   const db = readDemoDb();
   ensureCoordinatorCollection(db);
   return clone(db.coordenadores).sort((left, right) => left.nome.localeCompare(right.nome, "pt-BR"));
+}
+
+function createCoordinator(payload) {
+  requireAdmin();
+
+  const requiredFields = [
+    "nome",
+    "email",
+    "cpf",
+    "telefone",
+    "cep",
+    "rua",
+    "numero",
+    "bairro",
+    "cidade",
+    "estado",
+    "senha"
+  ];
+
+  const missingField = requiredFields.find((field) => !String(payload[field] || "").trim());
+  if (missingField) {
+    throw new DemoApiError("Preencha todos os campos obrigatorios para cadastrar a coordenacao demo.", 400);
+  }
+
+  const db = readDemoDb();
+  ensureCoordinatorCollection(db);
+
+  const normalizedEmail = String(payload.email || "").trim().toLowerCase();
+  const normalizedCpf = onlyDigits(payload.cpf);
+  const usuariosDemo = [...db.alunos, ...db.professores, ...db.coordenadores];
+
+  const emailAlreadyUsed =
+    DEMO_ACCOUNTS.some((account) => account.email.toLowerCase() === normalizedEmail) ||
+    usuariosDemo.some((usuario) => String(usuario.email || "").toLowerCase() === normalizedEmail);
+  if (emailAlreadyUsed) {
+    throw new DemoApiError("Ja existe um usuario demo com esse e-mail.", 409);
+  }
+
+  if (usuariosDemo.some((usuario) => onlyDigits(usuario.cpf) === normalizedCpf)) {
+    throw new DemoApiError("Ja existe um usuario demo com esse CPF.", 409);
+  }
+
+  const coordenador = {
+    id: nextId(db.coordenadores),
+    codigoRegistro: nextDemoRegistrationCode(db.coordenadores, "COORD"),
+    nome: String(payload.nome || "").trim(),
+    email: normalizedEmail,
+    cpf: normalizedCpf,
+    telefone: String(payload.telefone || "").trim(),
+    cep: String(payload.cep || "").trim(),
+    rua: String(payload.rua || "").trim(),
+    numero: String(payload.numero || "").trim(),
+    bairro: String(payload.bairro || "").trim(),
+    cidade: String(payload.cidade || "").trim(),
+    estado: String(payload.estado || "").trim().toUpperCase(),
+    tipoUsuario: "Coordenador",
+    ativo: true,
+    cursoResponsavel: String(payload.cursoResponsavel || "").trim() || null,
+    senha: String(payload.senha || "")
+  };
+
+  db.coordenadores.push(coordenador);
+  saveDemoDb(db);
+  return sanitizeDemoUser(clone(coordenador));
 }
 
 function listProfessors() {
@@ -1838,6 +1904,7 @@ function ensureCoordinatorCollection(db) {
   db.coordenadores ||= [
     {
       id: 901,
+      codigoRegistro: "COORD-1X4E7V",
       nome: "Clara Campos",
       email: "coordenacao@demo.edtech",
       cpf: "38765432100",
@@ -1854,6 +1921,7 @@ function ensureCoordinatorCollection(db) {
     },
     {
       id: 902,
+      codigoRegistro: "COORD-1XCBZG",
       nome: "Helena Rocha",
       email: "helena@coord.demo",
       cpf: "21987654300",
@@ -1876,6 +1944,7 @@ function ensureRegistrationCodes(db) {
   ensureCollectionRegistrationCodes(db.cursos, "CUR");
   ensureCollectionRegistrationCodes(db.modulos, "MOD");
   ensureCollectionRegistrationCodes(db.turmas, "TUR");
+  ensureCollectionRegistrationCodes(db.coordenadores, "COORD");
   ensureCollectionRegistrationCodes(db.professores, "PROF");
   ensureCollectionRegistrationCodes(db.matriculas, "MAT");
 }
@@ -2221,6 +2290,7 @@ function createInitialDemoDb() {
     coordenadores: [
       {
         id: 901,
+        codigoRegistro: "COORD-1X4E7V",
         nome: "Clara Campos",
         email: "coordenacao@demo.edtech",
         cpf: "38765432100",
@@ -2237,6 +2307,7 @@ function createInitialDemoDb() {
       },
       {
         id: 902,
+        codigoRegistro: "COORD-1XCBZG",
         nome: "Helena Rocha",
         email: "helena@coord.demo",
         cpf: "21987654300",

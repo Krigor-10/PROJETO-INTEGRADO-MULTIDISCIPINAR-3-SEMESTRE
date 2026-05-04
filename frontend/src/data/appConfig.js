@@ -5,6 +5,7 @@ export const APP_SECTIONS = [
   { key: "meus-cursos", label: "Meus cursos", roles: ["Aluno"], showInSidebar: false },
   { key: "alunos", label: "Alunos", roles: ["Admin", "Coordenador"] },
   { key: "professores", label: "Professores", roles: ["Admin", "Coordenador"] },
+  { key: "coordenadores", label: "Coordenadores", roles: ["Admin"] },
   { key: "cursos", label: "Cursos", roles: ["Admin", "Coordenador", "Professor"] },
   { key: "modulos", label: "Modulos", roles: ["Admin", "Coordenador"] },
   { key: "conteudos", label: "Conteudos", roles: ["Professor", "Aluno"] },
@@ -131,6 +132,10 @@ export function getSectionMeta(section, role) {
     professores: {
       title: "Corpo docente",
       description: "Visao dos professores disponiveis para o ecossistema de cursos e turmas."
+    },
+    coordenadores: {
+      title: "Coordenadores",
+      description: "Consulta dos coordenadores responsaveis pela supervisao academica dos cursos."
     },
     cursos: {
       title: "Catalogo academico",

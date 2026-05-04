@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { DataTable, InlineMessage, PanelCard } from "../../components/Primitives.jsx";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { InlineMessage, PanelCard } from "../../components/Primitives.jsx";
 import { ApiError, apiRequest } from "../../lib/api.js";
 import { mapById } from "../../lib/dashboard.js";
 import { normalizeStatus } from "../../lib/format.js";
@@ -51,7 +51,7 @@ export function SecaoModulos({
   const [filtroCurso, setFiltroCurso] = useState("todos");
   const [formularioModuloAberto, setFormularioModuloAberto] = useState(false);
   const [moduloDetalhadoId, setModuloDetalhadoId] = useState(null);
-  const [cursoModulosSelecionado, setCursoModulosSelecionado] = useState(null);
+  const [cursosExpandidos, setCursosExpandidos] = useState(() => new Set());
   const detalheModuloRef = useRef(null);
 
   const cursosOrdenados = useMemo(
@@ -148,22 +148,6 @@ export function SecaoModulos({
       }),
     [cursoPorId, modulos]
   );
-  const modulosPorCurso = useMemo(() => {
-    const grupos = new Map();
-
-    modulosOrdenados.forEach((modulo) => {
-      const cursoId = Number(modulo.cursoId);
-
-      if (!grupos.has(cursoId)) {
-        grupos.set(cursoId, []);
-      }
-
-      grupos.get(cursoId).push(modulo);
-    });
-
-    return grupos;
-  }, [modulosOrdenados]);
-
   // A tabela trabalha sempre em cima do recorte filtrado para que busca, contagem e selecao falem a mesma lingua.
   const linhasModulos = useMemo(
     () => {
@@ -189,6 +173,24 @@ export function SecaoModulos({
     [alunosAtivosPorCurso, cursoPorId, filtroCurso, modulosOrdenados, termoBusca]
   );
   const idsModulos = useMemo(() => new Set(linhasModulos.map((modulo) => modulo.id)), [linhasModulos]);
+  const gruposModulosPorCurso = useMemo(() => {
+    const grupos = new Map();
+
+    linhasModulos.forEach((modulo) => {
+      const cursoId = Number(modulo.cursoId);
+
+      if (!grupos.has(cursoId)) {
+        grupos.set(cursoId, {
+          curso: cursoPorId.get(cursoId) || { id: cursoId, titulo: `Curso #${cursoId}` },
+          modulos: []
+        });
+      }
+
+      grupos.get(cursoId).modulos.push(modulo);
+    });
+
+    return [...grupos.values()];
+  }, [cursoPorId, linhasModulos]);
   const modulosMarcados = useMemo(
     () => linhasModulos.filter((modulo) => modulosSelecionados.has(modulo.id)),
     [linhasModulos, modulosSelecionados]
@@ -227,6 +229,11 @@ export function SecaoModulos({
       ...dadosAtuais,
       cursoId: moduloEmEdicaoId ? dadosAtuais.cursoId : String(cursoEmFocoId)
     }));
+    setCursosExpandidos((atuais) => {
+      const proximos = new Set(atuais);
+      proximos.add(cursoEmFocoId);
+      return proximos;
+    });
     onCursoEmFocoAplicado?.();
   }, [cursoEmFocoId, moduloEmEdicaoId, onCursoEmFocoAplicado]);
 
@@ -251,28 +258,6 @@ export function SecaoModulos({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [formularioModuloAberto, salvandoModulo]);
-
-  useEffect(() => {
-    if (!cursoModulosSelecionado) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-
-    function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        fecharModulosCurso();
-      }
-    }
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [cursoModulosSelecionado]);
 
   // Atualiza o estado do formulario sem perder os outros campos em edicao.
   function atualizarCampoFormularioModulo(event) {
@@ -344,24 +329,42 @@ export function SecaoModulos({
     setModuloDetalhadoId(null);
   }
 
-  function abrirModulosCurso(event, modulo) {
-    event.stopPropagation();
+  function alternarCursoExpandido(cursoId) {
+    setCursosExpandidos((atuais) => {
+      const proximos = new Set(atuais);
 
-    const cursoId = Number(modulo.cursoId);
-    const modulosDoCurso = modulosPorCurso.get(cursoId) || [];
+      if (proximos.has(cursoId)) {
+        proximos.delete(cursoId);
+      } else {
+        proximos.add(cursoId);
+      }
 
-    if (modulosDoCurso.length <= 1) {
-      return;
-    }
-
-    setCursoModulosSelecionado({
-      curso: cursoPorId.get(cursoId) || { id: cursoId, titulo: `Curso #${cursoId}` },
-      modulos: modulosDoCurso
+      return proximos;
     });
   }
 
-  function fecharModulosCurso() {
-    setCursoModulosSelecionado(null);
+  function selecionarModulosDoCurso(event, grupo) {
+    event.stopPropagation();
+
+    if (salvandoModulo || !grupo.modulos.length) {
+      return;
+    }
+
+    const todosDoCursoSelecionados = grupo.modulos.every((modulo) => modulosSelecionados.has(modulo.id));
+
+    setModulosSelecionados((atuais) => {
+      const proximos = new Set(atuais);
+
+      grupo.modulos.forEach((modulo) => {
+        if (todosDoCursoSelecionados) {
+          proximos.delete(modulo.id);
+        } else {
+          proximos.add(modulo.id);
+        }
+      });
+
+      return proximos;
+    });
   }
 
   // A selecao em lote fica restrita aos modulos visiveis para evitar operacoes escondidas por filtros.
@@ -561,33 +564,6 @@ export function SecaoModulos({
     );
   }
 
-  function renderCursoModulo(modulo) {
-    const curso = cursoPorId.get(modulo.cursoId);
-    const modulosDoCurso = modulosPorCurso.get(Number(modulo.cursoId)) || [];
-
-    return (
-      <div className="module-course-cell">
-        <div>
-          <span className="course-preview-cell__name">{curso?.titulo || `Curso #${modulo.cursoId}`}</span>
-          <small>
-            {modulosDoCurso.length} modulo{modulosDoCurso.length === 1 ? "" : "s"} no curso
-          </small>
-        </div>
-        {modulosDoCurso.length > 1 ? (
-          <button
-            aria-label={`Ver todos os modulos de ${curso?.titulo || `Curso #${modulo.cursoId}`}`}
-            className="course-preview-cell__more"
-            onClick={(event) => abrirModulosCurso(event, modulo)}
-            title="Ver modulos do curso"
-            type="button"
-          >
-            +
-          </button>
-        ) : null}
-      </div>
-    );
-  }
-
   function renderBarraAcoesModulos() {
     return (
       <div className="table-toolbar table-toolbar--matriculas">
@@ -730,45 +706,6 @@ export function SecaoModulos({
     );
   }
 
-  function renderModulosCursoPopup() {
-    if (!cursoModulosSelecionado) {
-      return null;
-    }
-
-    return (
-      <div
-        className="content-form-modal"
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) {
-            fecharModulosCurso();
-          }
-        }}
-      >
-        <div
-          aria-label={`Modulos de ${cursoModulosSelecionado.curso.titulo}`}
-          aria-modal="true"
-          className="content-form-modal__card content-form-modal__card--compact"
-          role="dialog"
-        >
-          <button className="content-form-modal__close" onClick={fecharModulosCurso} type="button">
-            Fechar
-          </button>
-
-          <PanelCard description={cursoModulosSelecionado.curso.titulo} title="Modulos do curso">
-            <ul className="student-course-list module-popup-list">
-              {cursoModulosSelecionado.modulos.map((modulo) => (
-                <li key={modulo.id}>
-                  <strong>{modulo.titulo}</strong>
-                  <span>{modulo.codigoRegistro || "Sem codigo"}</span>
-                </li>
-              ))}
-            </ul>
-          </PanelCard>
-        </div>
-      </div>
-    );
-  }
-
   // Replica o toolbar de filtros usado nas outras secoes administrativas.
   function renderBarraFiltrosModulos() {
     return (
@@ -873,10 +810,154 @@ export function SecaoModulos({
     );
   }
 
+  function renderSelecaoCurso(grupo) {
+    const todosDoCursoSelecionados =
+      grupo.modulos.length > 0 && grupo.modulos.every((modulo) => modulosSelecionados.has(modulo.id));
+
+    return (
+      <label className="table-select-cell" onClick={(event) => event.stopPropagation()}>
+        <input
+          aria-label={`Selecionar modulos de ${grupo.curso.titulo}`}
+          checked={todosDoCursoSelecionados}
+          className="table-select-input"
+          disabled={salvandoModulo || !grupo.modulos.length}
+          onChange={(event) => selecionarModulosDoCurso(event, grupo)}
+          type="checkbox"
+        />
+      </label>
+    );
+  }
+
+  function obterResumoProfessoresCurso(cursoId) {
+    const professoresDoCurso = professoresPorCurso.get(Number(cursoId)) || [];
+
+    if (!professoresDoCurso.length) {
+      return "Sem professor vinculado";
+    }
+
+    return professoresDoCurso.map((professor) => professor.nome).join(", ");
+  }
+
+  function acionarPorTeclado(event, acao) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      acao();
+    }
+  }
+
+  function renderTabelaModulosPorCurso() {
+    if (!gruposModulosPorCurso.length) {
+      return (
+        <div className="empty-state">
+          {temFiltroAtivo ? "Nenhum modulo encontrado com os filtros aplicados." : "Nenhum modulo cadastrado ainda."}
+        </div>
+      );
+    }
+
+    return (
+      <div className="table-wrap">
+        <table className="data-table module-accordion-table">
+          <thead>
+            <tr>
+              <th>Selecionar</th>
+              <th>Curso / modulo</th>
+              <th>Codigo</th>
+              <th>Resumo</th>
+              <th>Alunos ativos</th>
+              <th>Detalhes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {gruposModulosPorCurso.map((grupo) => {
+              const cursoId = Number(grupo.curso.id);
+              const cursoExpandido = cursosExpandidos.has(cursoId);
+              const alunosAtivos = alunosAtivosPorCurso.get(cursoId) || 0;
+              const modulosSelecionadosNoCurso = grupo.modulos.filter((modulo) => modulosSelecionados.has(modulo.id)).length;
+
+              return (
+                <Fragment key={cursoId}>
+                  <tr
+                    aria-expanded={cursoExpandido}
+                    aria-label={`${cursoExpandido ? "Recolher" : "Expandir"} modulos de ${grupo.curso.titulo}`}
+                    className={`module-course-row table-row--clickable${cursoExpandido ? " module-course-row--expanded" : ""}`}
+                    onClick={() => alternarCursoExpandido(cursoId)}
+                    onKeyDown={(event) => acionarPorTeclado(event, () => alternarCursoExpandido(cursoId))}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <td data-label="Selecionar">{renderSelecaoCurso(grupo)}</td>
+                    <td data-label="Curso">
+                      <div className="module-course-summary">
+                        <strong>{grupo.curso.titulo}</strong>
+                        <span>{grupo.curso.codigoRegistro || "Sem codigo do curso"}</span>
+                      </div>
+                    </td>
+                    <td data-label="Codigo">{grupo.curso.codigoRegistro || "Sem codigo"}</td>
+                    <td data-label="Resumo">
+                      <div className="table-cell-stack">
+                        <strong>
+                          {grupo.modulos.length} modulo{grupo.modulos.length === 1 ? "" : "s"}
+                        </strong>
+                        <p>
+                          {modulosSelecionadosNoCurso
+                            ? `${modulosSelecionadosNoCurso} selecionado${modulosSelecionadosNoCurso > 1 ? "s" : ""}`
+                            : obterResumoProfessoresCurso(cursoId)}
+                        </p>
+                      </div>
+                    </td>
+                    <td data-label="Alunos ativos">{alunosAtivos}</td>
+                    <td data-label="Detalhes">
+                      <button
+                        aria-label={`${cursoExpandido ? "Recolher" : "Expandir"} modulos de ${grupo.curso.titulo}`}
+                        className={`table-row-arrow module-course-toggle${cursoExpandido ? " module-course-toggle--open" : ""}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          alternarCursoExpandido(cursoId);
+                        }}
+                        title={cursoExpandido ? "Recolher modulos" : "Ver modulos"}
+                        type="button"
+                      >
+                        {cursoExpandido ? "v" : ">"}
+                      </button>
+                    </td>
+                  </tr>
+
+                  {cursoExpandido
+                    ? grupo.modulos.map((modulo) => (
+                        <tr
+                          aria-label={`Ver detalhes do modulo ${modulo.titulo}`}
+                          className={`module-child-row table-row--clickable${
+                            modulo.id === moduloDetalhadoId ? " table-row--selected" : ""
+                          }`}
+                          key={modulo.id}
+                          onClick={() => abrirDetalheModulo(modulo)}
+                          onKeyDown={(event) => acionarPorTeclado(event, () => abrirDetalheModulo(modulo))}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <td data-label="Selecionar">{renderSelecaoModulo(modulo)}</td>
+                          <td data-label="Modulo">{renderTituloModulo(modulo)}</td>
+                          <td data-label="Codigo">{modulo.codigoRegistro || "Sem codigo"}</td>
+                          <td data-label="Resumo">
+                            <span className="table-muted">Modulo do curso</span>
+                          </td>
+                          <td data-label="Alunos ativos">{alunosAtivosPorCurso.get(modulo.cursoId) || 0}</td>
+                          <td data-label="Detalhes">{renderAcaoDetalheModulo(modulo)}</td>
+                        </tr>
+                      ))
+                    : null}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   return (
     <div className={`module-management-layout${moduloDetalhado ? " module-management-layout--with-detail" : ""}`}>
       {renderFormularioModulo()}
-      {renderModulosCursoPopup()}
 
       <PanelCard
         description={
@@ -891,31 +972,7 @@ export function SecaoModulos({
         {!formularioModuloAberto && mensagemFormularioModulo.message ? (
           <InlineMessage tone={mensagemFormularioModulo.tone}>{mensagemFormularioModulo.message}</InlineMessage>
         ) : null}
-        <DataTable
-          columns={[
-            { key: "selecionar", label: "Selecionar", render: renderSelecaoModulo },
-            { key: "codigoRegistro", label: "CODIGO DO MODULO", render: (row) => row.codigoRegistro || "Sem codigo" },
-            { key: "titulo", label: "Modulo", render: renderTituloModulo },
-            {
-              key: "cursoId",
-              label: "Curso",
-              render: renderCursoModulo
-            },
-            {
-              key: "alunosAtivos",
-              label: "Alunos ativos",
-              render: (row) => alunosAtivosPorCurso.get(row.cursoId) || 0
-            },
-            { key: "detalhes", label: "", render: renderAcaoDetalheModulo }
-          ]}
-          emptyMessage={temFiltroAtivo ? "Nenhum modulo encontrado com os filtros aplicados." : "Nenhum modulo cadastrado ainda."}
-          getRowAriaLabel={(row) => `Ver detalhes do modulo ${row.titulo}`}
-          getRowClassName={(row) =>
-            `table-row--clickable${row.id === moduloDetalhadoId ? " table-row--selected" : ""}`
-          }
-          onRowClick={abrirDetalheModulo}
-          rows={linhasModulos}
-        />
+        {renderTabelaModulosPorCurso()}
       </PanelCard>
       {renderDetalheModulo()}
     </div>

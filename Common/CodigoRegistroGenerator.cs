@@ -11,6 +11,8 @@ public static class CodigoRegistroGenerator
 
     public static string GerarCurso() => Gerar("CUR");
 
+    public static string GerarCoordenador() => Gerar("COORD");
+
     public static string GerarModulo() => Gerar("MOD");
 
     public static string GerarMatricula() => Gerar("MAT");

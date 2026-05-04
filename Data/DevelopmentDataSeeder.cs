@@ -270,6 +270,7 @@ public static class DevelopmentDataSeeder
         coordinator.Estado = "SP";
         coordinator.ConfigurarAcesso("Coordenador", BCrypt.Net.BCrypt.HashPassword(DefaultPassword));
         coordinator.CursoResponsavel = responsibleCourse;
+        await EnsureCoordinatorRegistrationCodeAsync(context, coordinator);
 
         return coordinator;
     }
@@ -686,6 +687,33 @@ public static class DevelopmentDataSeeder
         }
 
         throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o professor de teste.");
+    }
+
+    private static async Task EnsureCoordinatorRegistrationCodeAsync(PlataformaContext context, Coordenador coordinator)
+    {
+        if (!string.IsNullOrWhiteSpace(coordinator.CodigoRegistro))
+        {
+            return;
+        }
+
+        for (var tentativa = 0; tentativa < 10; tentativa++)
+        {
+            var codigo = CodigoRegistroGenerator.GerarCoordenador();
+            var emUsoLocal = context.Coordenadores.Local.Any(item =>
+                !ReferenceEquals(item, coordinator) &&
+                item.CodigoRegistro == codigo);
+            var emUsoBanco = await context.Coordenadores.AnyAsync(item =>
+                item.Id != coordinator.Id &&
+                item.CodigoRegistro == codigo);
+
+            if (!emUsoLocal && !emUsoBanco)
+            {
+                coordinator.CodigoRegistro = codigo;
+                return;
+            }
+        }
+
+        throw new InvalidOperationException("Nao foi possivel gerar um codigo de registro unico para o coordenador de teste.");
     }
 
     private static async Task EnsureModuleRegistrationCodeAsync(PlataformaContext context, Modulo modulo)
